@@ -86,3 +86,49 @@ test('malformed products, missing fields and API timeouts propagate meaningful f
     /timeout/,
   );
 });
+
+import { runConnectorContractTests } from '@agentshelf/testing';
+runConnectorContractTests(wooCommerceConnector, target, () => ({ ...ctx }));
+
+test('public discovery follows pages and stops at the caller limit', async () => {
+  const requested = [];
+  const context = {
+    ...ctx,
+    limit: 101,
+    http: {
+      async get(url) {
+        const parsed = new URL(url);
+        requested.push(parsed.searchParams.get('page'));
+        const page = Number(parsed.searchParams.get('page'));
+        return {
+          url,
+          status: 200,
+          headers: {},
+          body: parsed.pathname.endsWith('robots.txt')
+            ? ''
+            : JSON.stringify(
+                page === 1
+                  ? Array.from({ length: 100 }, (_, i) => ({
+                      ...product,
+                      id: i + 1,
+                      permalink: `https://demo.example/p/${i + 1}`,
+                    }))
+                  : [
+                      {
+                        ...product,
+                        id: 101,
+                        permalink: 'https://demo.example/p/101',
+                      },
+                    ],
+              ),
+        };
+      },
+    },
+  };
+  const refs = await Array.fromAsync(
+    wooCommerceConnector.discoverProducts(target, context),
+  );
+  assert.equal(refs.length, 101);
+  assert.ok(requested.includes('2'));
+  assert.equal(new Set(refs.map((ref) => ref.sourceId)).size, 101);
+});

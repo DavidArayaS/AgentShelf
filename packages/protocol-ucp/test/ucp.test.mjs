@@ -68,3 +68,38 @@ test('multiple currencies require an explicit supported selection', async () => 
     'EUR',
   );
 });
+
+test('variant identity, media, options and optional fields survive generated combinations', async () => {
+  for (let mask = 0; mask < 32; mask++) {
+    const input = structuredClone(catalog);
+    const p = input.products[0];
+    if (mask & 1) p.images = [];
+    else p.images[0] = { ...p.images[0], width: 640, height: 480 };
+    if (mask & 2) p.categories = [];
+    if (mask & 4) p.offers[0].availability = 'unknown';
+    p.variants = [
+      {
+        id: 'v',
+        ...(mask & 8 ? {} : { name: 'Small' }),
+        identifiers: mask & 16 ? {} : { sku: 'SMALL', gtin: '4006381333931' },
+        images: p.images,
+        attributes: [{ name: 'size', value: 'Small' }],
+        offers: structuredClone(p.offers),
+      },
+    ];
+    const output = await exportUcpCatalog(input);
+    assert.equal(await validateUcpCatalog(output), true);
+    assert.equal(output.products[0].variants[0].id, 'v');
+    assert.equal(output.products[0].variants[0].options[0].label, 'Small');
+  }
+  const duplicate = structuredClone(catalog);
+  duplicate.products[0].offers.push({
+    ...duplicate.products[0].offers[0],
+    id: 'another',
+  });
+  await assert.rejects(exportUcpCatalog(duplicate), /exactly one/);
+  assert.equal(
+    await validateUcpCatalog({ ucp: { version: 'invalid' }, products: [] }),
+    false,
+  );
+});

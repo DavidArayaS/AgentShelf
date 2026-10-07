@@ -126,7 +126,10 @@ export function createMcpServer(options: McpOptions): McpServer {
           };
         return result({
           schemaVersion: '1.0',
-          [field]: product?.[field] ?? catalog.merchant[field] ?? null,
+          [field]:
+            product?.[field] ??
+            ((await query.getMerchant?.()) ?? catalog.merchant)[field] ??
+            null,
         });
       },
     );
@@ -138,7 +141,11 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: z.object({}),
       annotations,
     },
-    async () => result({ schemaVersion: '1.0', merchant: catalog.merchant }),
+    async () =>
+      result({
+        schemaVersion: '1.0',
+        merchant: (await query.getMerchant?.()) ?? catalog.merchant,
+      }),
   );
   return server;
 }

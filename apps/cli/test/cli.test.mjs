@@ -16,3 +16,21 @@ test('CLI has useful help, machine-readable validation and failure exit codes', 
   assert.notEqual(run(['scan', 'http://127.0.0.1/']).status, 0);
   assert.match(run(['scan', '--help']).stdout, /limit/);
 });
+
+test('protocol reporting derives exact supported versions from implemented adapters', () => {
+  const response = run(['protocols']);
+  assert.equal(response.status, 0, response.stderr);
+  const registry = JSON.parse(response.stdout);
+  assert.equal(registry.acp.version, '2026-04-17');
+  assert.ok(registry.acp.supportedCapabilities.length);
+  assert.equal(registry.ucp.version, '2026-08-25');
+  assert.ok(registry.ucp.unsupportedCapabilities.includes('checkout'));
+  const unsupported = run([
+    'export',
+    '../../examples/sample-catalog/catalog.json',
+    '--format',
+    'unsupported',
+  ]);
+  assert.notEqual(unsupported.status, 0);
+  assert.match(unsupported.stderr, /Unsupported export format/);
+});

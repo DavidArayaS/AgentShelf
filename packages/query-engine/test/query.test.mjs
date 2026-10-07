@@ -88,3 +88,66 @@ test('sorting, pagination, decimal comparison and immutable results are stable',
   assert.equal(await engine.getProduct('missing'), undefined);
   assert.equal((await engine.searchProducts({})).total, 2);
 });
+
+test('variant properties, no-price offers and descending prices preserve filter semantics', () => {
+  const c = structuredClone(catalog);
+  const p = c.products[0];
+  p.variants = [
+    {
+      id: 'v',
+      identifiers: {},
+      images: [],
+      attributes: [{ name: 'size', value: '10' }],
+      offers: [
+        {
+          id: 'v-offer',
+          price: { amount: '80', currency: 'USD' },
+          availability: 'in_stock',
+        },
+      ],
+    },
+  ];
+  assert.equal(
+    searchProducts(c, {
+      variantProperties: { size: '10' },
+      minPrice: 70,
+      maxPrice: 90,
+      currency: 'USD',
+    }).total,
+    1,
+  );
+  assert.equal(
+    searchProducts(c, { variantProperties: { size: '9' } }).total,
+    0,
+  );
+  assert.equal(searchProducts(c, { brands: ['absent'] }).total, 0);
+  assert.equal(searchProducts(c, { categories: ['absent'] }).total, 0);
+  assert.equal(searchProducts(c, { attributes: { absent: true } }).total, 0);
+  c.products.push({
+    ...structuredClone(p),
+    id: 'no-price',
+    name: 'Unpriced',
+    variants: [],
+    offers: [{ id: 'empty', price: null, availability: 'unknown' }],
+  });
+  assert.equal(
+    searchProducts(c, { sort: 'price_desc', currency: 'USD' }).products[0].id,
+    p.id,
+  );
+  assert.equal(searchProducts(c, { currency: 'EUR' }).total, 0);
+  assert.equal(searchProducts(c, { query: 'no-matching-product' }).total, 0);
+});
+
+test('catalog replacement updates products and merchant atomically and isolates metadata', async () => {
+  const engine = new MemoryQueryEngine(catalog);
+  const updated = structuredClone(catalog);
+  updated.merchant.name = 'Updated store';
+  updated.products[0].name = 'Updated item';
+  await engine.replaceCatalog(updated);
+  assert.equal((await engine.searchProducts({ query: 'updated' })).total, 1);
+  const merchant = await engine.getMerchant();
+  merchant.name = 'mutated';
+  assert.equal((await engine.getMerchant()).name, 'Updated store');
+  await assert.rejects(engine.replaceCatalog({}));
+  assert.equal((await engine.searchProducts({ query: 'updated' })).total, 1);
+});

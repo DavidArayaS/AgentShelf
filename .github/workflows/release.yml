@@ -1,0 +1,47 @@
+name: Release artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish verified packages using npm trusted publishing (requires a version tag)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: npm-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: Verify release candidate
+        run: |
+          for gate in format:check lint typecheck test test:integration licenses:check security:check build test:coverage packages:check sbom:generate; do
+            pnpm "$gate" || exit 1
+          done
+      - run: pnpm exec playwright-core install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: agentshelf-release-${{ github.sha }}
+          path: reports/
+      - name: Verify release tag matches package version
+        if: inputs.publish
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: node -e 'const p=require("./apps/cli/package.json"); if(process.env.RELEASE_REF !== `refs/tags/v${p.version}`) throw new Error("Dispatch publishing from the matching version tag")'
+      - name: Publish packages with provenance
+        if: inputs.publish
+        run: |
+          unset NODE_AUTH_TOKEN
+          for package in reports/packages/*.tgz; do
+            npm publish "$package" --access public --provenance || exit 1
+          done

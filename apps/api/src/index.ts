@@ -6,11 +6,7 @@ import {
   type Server,
 } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import {
-  CatalogSchema,
-  catalogJsonSchema,
-  type Catalog,
-} from '@agentshelf/schema';
+import { CatalogSchema, type Catalog } from '@agentshelf/schema';
 import {
   MemoryQueryEngine,
   SearchQuerySchema,
@@ -22,12 +18,22 @@ import {
 } from '@agentshelf/storage-memory';
 import {
   scanStore,
+  CatalogValidationError,
   validateCatalog,
   type ScanOptions,
   type CatalogRepository,
   type ScanRepository,
 } from '@agentshelf/core';
-import { parseBoundedJson } from '@agentshelf/crawler';
+import {
+  parseBoundedJson,
+  UnsafeUrlError,
+  FetchError,
+} from '@agentshelf/crawler';
+import { ConnectorError, ProductParseError } from '@agentshelf/connector-sdk';
+import { ProtocolValidationError } from '@agentshelf/protocol-sdk';
+import { ZodError } from 'zod';
+import { openApi } from './openapi.js';
+export { openApi } from './openapi.js';
 import { exportAcpCatalog } from '@agentshelf/protocol-acp';
 import { exportUcpCatalog } from '@agentshelf/protocol-ucp';
 export interface ApiOptions {
@@ -47,69 +53,13 @@ class ApiError extends Error {
     super(message);
   }
 }
-const errorSchema = {
-  type: 'object',
-  required: ['error'],
-  properties: {
-    error: {
-      type: 'object',
-      required: ['code', 'message', 'requestId'],
-      properties: {
-        code: { type: 'string' },
-        message: { type: 'string' },
-        requestId: { type: 'string' },
-      },
-    },
-  },
-};
-export const openApi: Readonly<Record<string, unknown>> = {
-  openapi: '3.1.0',
-  info: { title: 'AgentShelf local API', version: '0.1.0' },
-  paths: Object.fromEntries(
-    [
-      ['/v1/products', 'get'],
-      ['/v1/products/search', 'get'],
-      ['/v1/products/{id}', 'get'],
-      ['/v1/catalogs/{id}', 'get'],
-      ['/v1/scans', 'post'],
-      ['/v1/scans/{id}', 'get'],
-      ['/v1/validate', 'post'],
-      ['/v1/exports/json', 'get'],
-      ['/v1/exports/acp', 'get'],
-      ['/v1/exports/ucp', 'get'],
-    ].map(([path, method]) => [
-      path,
-      {
-        [method ?? 'get']: {
-          ...(path?.includes('{id}')
-            ? {
-                parameters: [
-                  {
-                    name: 'id',
-                    in: 'path',
-                    required: true,
-                    schema: { type: 'string' },
-                  },
-                ],
-              }
-            : {}),
-          responses: {
-            '200': { description: 'Version 1.0 JSON response' },
-            '400': {
-              description: 'Invalid request',
-              content: { 'application/json': { schema: errorSchema } },
-            },
-            '404': {
-              description: 'Resource not found',
-              content: { 'application/json': { schema: errorSchema } },
-            },
-          },
-        },
-      },
-    ]),
-  ),
-  components: { schemas: { Catalog: catalogJsonSchema, Error: errorSchema } },
-};
+function parseRequestJson(text: string, maxBytes: number): unknown {
+  try {
+    return parseBoundedJson(text, maxBytes);
+  } catch {
+    throw new ApiError('INVALID_JSON', 'Malformed or unsafe JSON', 400);
+  }
+}
 async function readBody(request: IncomingMessage): Promise<unknown> {
   if (!request.headers['content-type']?.startsWith('application/json'))
     throw new ApiError('UNSUPPORTED_MEDIA_TYPE', 'Use application/json', 415);
@@ -122,7 +72,7 @@ async function readBody(request: IncomingMessage): Promise<unknown> {
       throw new ApiError('BODY_TOO_LARGE', 'Request body exceeds 1 MiB', 413);
     chunks.push(data);
   }
-  return parseBoundedJson(
+  return parseRequestJson(
     new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)),
     1024 * 1024,
   );
@@ -138,7 +88,7 @@ function send(response: ServerResponse, status: number, value: unknown): void {
 export async function createApi(options: ApiOptions): Promise<Server> {
   const catalog = CatalogSchema.parse(options.catalog);
   let activeCatalog = catalog;
-  let engine = options.queryEngine ?? new MemoryQueryEngine(catalog);
+  const engine = options.queryEngine ?? new MemoryQueryEngine(catalog);
   const catalogs = options.catalogRepository ?? new MemoryCatalogRepository();
   const scans = options.scanRepository ?? new MemoryScanRepository();
   await catalogs.save(catalog);
@@ -155,7 +105,10 @@ export async function createApi(options: ApiOptions): Promise<Server> {
             'Browser origin is not allowed',
             403,
           );
-        if (origin) response.setHeader('access-control-allow-origin', origin);
+        if (origin) {
+          response.setHeader('access-control-allow-origin', origin);
+          response.setHeader('vary', 'Origin');
+        }
         const host = request.headers.host ?? '';
         if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(host))
           throw new ApiError(
@@ -165,7 +118,11 @@ export async function createApi(options: ApiOptions): Promise<Server> {
           );
         const url = new URL(request.url ?? '/', 'http://localhost');
         const path = url.pathname;
-        if (request.method === 'OPTIONS' && origin === options.browserOrigin) {
+        if (
+          request.method === 'OPTIONS' &&
+          origin &&
+          origin === options.browserOrigin
+        ) {
           response.writeHead(204, {
             'access-control-allow-methods': 'GET, POST, OPTIONS',
             'access-control-allow-headers': 'content-type',
@@ -206,7 +163,7 @@ export async function createApi(options: ApiOptions): Promise<Server> {
               : ['brands', 'categories'].includes(key)
                 ? value.split(',')
                 : ['attributes', 'variantProperties'].includes(key)
-                  ? parseBoundedJson(value, 8192)
+                  ? parseRequestJson(value, 8192)
                   : value;
           }
           send(
@@ -244,6 +201,12 @@ export async function createApi(options: ApiOptions): Promise<Server> {
           return;
         }
         if (request.method === 'POST' && path === '/v1/scans') {
+          if (!engine.replaceCatalog)
+            throw new ApiError(
+              'CATALOG_UPDATE_UNSUPPORTED',
+              'The configured query engine does not support catalog replacement',
+              409,
+            );
           const input = await readBody(request);
           if (
             !input ||
@@ -271,8 +234,8 @@ export async function createApi(options: ApiOptions): Promise<Server> {
             catalogRepository: catalogs,
             scanRepository: scans,
           });
+          await engine.replaceCatalog(report.catalog);
           activeCatalog = report.catalog;
-          engine = new MemoryQueryEngine(report.catalog);
           send(response, 201, {
             schemaVersion: '1.0',
             scanId: report.scanId,
@@ -315,13 +278,44 @@ export async function createApi(options: ApiOptions): Promise<Server> {
           response.destroy();
           return;
         }
-        const known = error instanceof ApiError;
-        send(response, known ? error.status : 400, {
-          error: {
-            code: known ? error.code : 'INVALID_REQUEST',
-            message: known ? error.message : 'Request could not be processed',
-            requestId,
-          },
+        let status = 500,
+          code = 'INTERNAL_ERROR',
+          message = 'Unexpected local service error';
+        if (error instanceof ApiError) {
+          status = error.status;
+          code = error.code;
+          message = error.message;
+        } else if (error instanceof UnsafeUrlError) {
+          status = 400;
+          code = error.code;
+          message = 'URL is not a permitted public HTTP(S) destination';
+        } else if (
+          error instanceof ProtocolValidationError ||
+          error instanceof CatalogValidationError ||
+          error instanceof ProductParseError
+        ) {
+          status = 422;
+          code = error.code;
+          message = error.message;
+        } else if (
+          error instanceof FetchError ||
+          error instanceof ConnectorError
+        ) {
+          status = 502;
+          code = error.code;
+          message = 'Unable to read public store data';
+        } else if (
+          error instanceof ZodError ||
+          error instanceof SyntaxError ||
+          error instanceof URIError
+        ) {
+          status = 400;
+          code = 'INVALID_REQUEST';
+          message = 'Request does not match the documented schema';
+        }
+        send(response, status, {
+          schemaVersion: '1.0',
+          error: { code, message, requestId },
         });
       });
     },

@@ -37,22 +37,22 @@ export function selectedCurrency(
     );
   return unique[0];
 }
+const supportedCurrencies = new Set(Intl.supportedValuesOf('currency'));
+function currencyDigits(currency: string): number {
+  if (!supportedCurrencies.has(currency))
+    throw new ProtocolValidationError(`Unsupported ISO currency: ${currency}`);
+  return (
+    new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency,
+    }).resolvedOptions().maximumFractionDigits ?? 2
+  );
+}
 /** Convert an exact decimal to ISO 4217 minor units without rounding or float arithmetic. */
 export function minorUnits(amount: string, currency: string): number {
-  if (!/^[A-Z]{3}$/.test(currency))
-    throw new ProtocolValidationError('Invalid ISO currency code');
-  let precision: number;
-  try {
-    precision =
-      new Intl.NumberFormat('en', {
-        style: 'currency',
-        currency,
-      }).resolvedOptions().maximumFractionDigits ?? 2;
-  } catch (cause) {
-    throw new ProtocolValidationError(`Unsupported ISO currency: ${currency}`, {
-      cause,
-    });
-  }
+  if (amount.length > 128 || !/^(0|[1-9]\d*)(\.\d+)?$/.test(amount))
+    throw new ProtocolValidationError('Expected a nonnegative decimal price');
+  const precision = currencyDigits(currency);
   const [whole = '0', fraction = ''] = amount.split('.');
   if (fraction.slice(precision).replaceAll('0', '') !== '')
     throw new ProtocolValidationError(
@@ -72,18 +72,7 @@ export function exactMajorUnit(minor: number, currency: string): string {
     throw new ProtocolValidationError(
       'Expected a nonnegative safe minor-unit integer',
     );
-  let digits: number;
-  try {
-    digits =
-      new Intl.NumberFormat('en', {
-        style: 'currency',
-        currency,
-      }).resolvedOptions().maximumFractionDigits ?? 2;
-  } catch (cause) {
-    throw new ProtocolValidationError(`Unsupported ISO currency: ${currency}`, {
-      cause,
-    });
-  }
+  const digits = currencyDigits(currency);
   const value = BigInt(minor),
     base = 10n ** BigInt(digits);
   return digits

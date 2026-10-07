@@ -148,3 +148,7 @@ test('variants have stable identity and multiple currencies survive extraction',
   assert.equal(p.variants[0].offers.length, 2);
   assert.equal(p.variants[0].identifiers.sku, 'RED');
 });
+
+// Reusable public contract, also consumed by community connector packages.
+import { runConnectorContractTests, fixtureContext } from '@agentshelf/testing';
+runConnectorContractTests(genericWebConnector, target, fixtureContext);

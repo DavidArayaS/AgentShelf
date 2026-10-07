@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { Command } from 'commander';
+import { acpAdapter } from '@agentshelf/protocol-acp';
+import { ucpAdapter } from '@agentshelf/protocol-ucp';
 import { startApi } from '@agentshelf/api';
 import { startMcp, MCP_SUPPORT } from '@agentshelf/mcp';
 import { CatalogSchema } from '@agentshelf/schema';
@@ -44,7 +46,20 @@ program
   .description('Scan up to 100 public product pages')
   .option('--limit <count>', 'Maximum products', '100')
   .action(async (url, options) => {
-    const report = await scanStore(url, { limit: Number(options.limit) });
+    const report = await scanStore(url, {
+      limit: Number(options.limit),
+      eventSink: {
+        emit(event) {
+          if (
+            !program.opts().json &&
+            event.type === 'product' &&
+            (event.productsNormalized === 1 ||
+              event.productsNormalized % 10 === 0)
+          )
+            console.error(`Scanned ${event.productsNormalized} products…`);
+        },
+      },
+    });
     if (program.opts().json) output(report);
     else {
       console.log(
@@ -68,15 +83,31 @@ program
   .action(async (input) => output(validateCatalog(await readInput(input))));
 program
   .command('export <url>')
-  .description('Scan and export a canonical JSON catalog')
+  .description(
+    'Scan a store or read a local catalog and export JSON, ACP or UCP',
+  )
   .option('--format <format>', 'Export format', 'json')
   .option('--output <file>', 'Write output file')
+  .option(
+    '--currency <currency>',
+    'Select an offer currency for protocol export',
+  )
   .option('--limit <count>', 'Maximum products', '100')
   .action(async (url, options) => {
-    if (options.format !== 'json')
-      throw new Error(`Protocol ${options.format} is not implemented yet`);
-    const report = await scanStore(url, { limit: Number(options.limit) });
-    const json = `${JSON.stringify(report.catalog, null, 2)}\n`;
+    if (!['json', 'acp', 'ucp'].includes(options.format))
+      throw new Error(`Unsupported export format: ${options.format}`);
+    const catalog = /^https?:\/\//.test(url)
+      ? (await scanStore(url, { limit: Number(options.limit) })).catalog
+      : CatalogSchema.parse(await readInput(url));
+    const adapter = options.format === 'acp' ? acpAdapter : ucpAdapter;
+    const document =
+      options.format === 'json'
+        ? catalog
+        : await adapter.exportCatalog(
+            catalog,
+            options.currency ? { currency: options.currency } : {},
+          );
+    const json = `${JSON.stringify(document, null, 2)}\n`;
     if (options.output) await writeFile(options.output, json, { flag: 'wx' });
     else process.stdout.write(json);
   });
@@ -108,9 +139,29 @@ program
       server.close();
       throw error;
     }
-    console.log(
-      `AgentShelf: ${catalog.products.length} products loaded; REST port ${options.port}`,
-    );
+    const apiAddress = server.address();
+    const mcpAddress = mcp.server.address();
+    if (
+      !apiAddress ||
+      typeof apiAddress === 'string' ||
+      !mcpAddress ||
+      typeof mcpAddress === 'string'
+    )
+      throw new Error('Local servers did not bind');
+    const endpoints = {
+      rest: `http://127.0.0.1:${apiAddress.port}`,
+      mcp: `http://127.0.0.1:${mcpAddress.port}/mcp`,
+    };
+    if (program.opts().json)
+      output({
+        schemaVersion: '1.0',
+        products: catalog.products.length,
+        ...endpoints,
+      });
+    else
+      console.log(
+        `AgentShelf\n\nCatalog loaded: ${catalog.products.length} products\nREST: ${endpoints.rest}\nMCP: ${endpoints.mcp}`,
+      );
     const close = () => {
       void mcp.close();
       server.closeAllConnections();
@@ -125,8 +176,8 @@ program
   .action(() =>
     output({
       json: { version: '1.0', supported: ['catalog'] },
-      acp: { supported: [], unsupported: ['catalog', 'checkout'] },
-      ucp: { supported: [], unsupported: ['catalog', 'checkout'] },
+      acp: acpAdapter.support,
+      ucp: ucpAdapter.support,
       mcp: MCP_SUPPORT,
     }),
   );

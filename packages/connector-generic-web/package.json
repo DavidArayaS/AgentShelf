@@ -36,5 +36,8 @@
     "cheerio": "1.2.0",
     "fast-xml-parser": "5.11.2",
     "robots-parser": "3.0.1"
+  },
+  "devDependencies": {
+    "@agentshelf/testing": "workspace:^"
   }
 }
