@@ -1,0 +1,11 @@
+{
+  "name": "@example/agentshelf-custom-connector",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agentshelf/connector-sdk": "workspace:*"
+  }
+}

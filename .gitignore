@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+reports/
+*.tsbuildinfo
+*.tgz
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*

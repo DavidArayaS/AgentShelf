@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "id": "catalog-demo",
+  "merchant": {
+    "id": "merchant-demo",
+    "name": "Demo Store",
+    "url": "https://demo.example/"
+  },
+  "generatedAt": "2026-10-07T00:00:00Z",
+  "products": [
+    {
+      "schemaVersion": "1.0",
+      "id": "product-trail",
+      "merchantId": "merchant-demo",
+      "name": "Waterproof Trail Shoe",
+      "description": "A lightweight waterproof running shoe",
+      "url": "https://demo.example/products/trail-shoe",
+      "brand": "Example",
+      "identifiers": { "sku": "TRAIL-1" },
+      "categories": [{ "id": "shoes", "name": "Shoes", "path": [] }],
+      "offers": [
+        {
+          "id": "offer-trail",
+          "price": { "amount": "129.95", "currency": "USD" },
+          "availability": "in_stock"
+        }
+      ],
+      "images": [
+        { "url": "https://demo.example/trail.jpg", "alt": "Trail shoe" }
+      ],
+      "variants": [],
+      "attributes": [{ "name": "waterproof", "value": true }],
+      "provenance": {
+        "url": "https://demo.example/products/trail-shoe",
+        "connector": "fixture",
+        "observedAt": "2026-10-07T00:00:00Z",
+        "method": "import",
+        "warnings": []
+      }
+    }
+  ]
+}

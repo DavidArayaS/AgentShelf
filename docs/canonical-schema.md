@@ -1,0 +1,7 @@
+# Canonical commerce schema
+
+`@agentshelf/schema` exports Zod validators, corresponding TypeScript types, and structural JSON Schema (2020-12). The catalog carries schemaVersion `1.0`; products also carry their schema version. Domain identity is opaque and independent of prices or observation times. Product variants have independent identities and offers. Prices are exact, nonnegative decimal strings (up to 15 integer and 6 fractional digits), paired with uppercase three-letter currency codes; protocols must explicitly validate their supported ISO currencies and minor units. No binary floating point is required for serialization.
+
+Availability uses `unknown`; inventory quantities, offer prices, shipping costs/times, returns acceptance/window and aggregate ratings may be explicitly null. Empty arrays mean no observations, not a guarantee of absence. Provenance records source, connector, extraction method and observed time. Category paths and typed attributes preserve normalized commerce semantics without platform/protocol fields.
+
+Zod parsing strips unknown object fields for forward-tolerant reads. Producers must not depend on unsupported fields surviving read/write cycles. JSON Schema describes structure, while Zod also enforces merchant ownership, unique identities and range relationships; JSON Schema alone is insufficient to certify a catalog. Bound arrays/strings protect consumers, but transport byte limits remain mandatory.

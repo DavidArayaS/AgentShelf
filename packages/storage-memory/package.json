@@ -1,0 +1,35 @@
+{
+  "name": "@agentshelf/storage-memory",
+  "version": "0.1.0",
+  "description": "AgentShelf storage-memory public package",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidArayaS/AgentShelf.git",
+    "directory": "packages/storage-memory"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agentshelf/core": "workspace:^",
+    "@agentshelf/schema": "workspace:^"
+  }
+}

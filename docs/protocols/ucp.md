@@ -1,0 +1,7 @@
+# Universal Commerce Protocol
+
+Target is the official release tag `v2026-08-25`, commit `cd78fb38e819de77d9b527d110476eccb876f1bd`, checked 2026-10-07. UCP version identifiers use dates. Its `main` branch is explicitly draft; this adapter never targets it. All 116 official source JSON Schemas for this exact release are vendored under `spec/2026-08-25/source/schemas` with the official Apache-2.0 license and retained notices. `spec/SOURCE.json` records file paths and a SHA-256 inventory recomputed in tests. The adapter validates the catalog search response against the pinned `shopping/catalog_search.json` response schema and all its local references.
+
+Implemented mapping: response `ucp.version`, required product and variant identity, descriptions, exact ISO 4217 minor-unit prices, price ranges, category labels, GTIN, option strings, images and observed availability. Every emitted product/variant needs descriptions and exactly one price in the selected currency. Missing or ambiguous values fail instead of being fabricated. Multiple currencies require a caller selection; no currency amount is rounded.
+
+Supported capability is catalog search/lookup data mapping only. This library does not implement UCP HTTP negotiation or services. It does not implement checkout, cart, orders, payment handlers, pagination, catalog filters, seller links, unit pricing, sanitization for HTML, or certification. A schema-valid catalog payload does not claim full protocol compliance.

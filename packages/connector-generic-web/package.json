@@ -1,0 +1,40 @@
+{
+  "name": "@agentshelf/connector-generic-web",
+  "version": "0.1.0",
+  "description": "AgentShelf connector-generic-web public package",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidArayaS/AgentShelf.git",
+    "directory": "packages/connector-generic-web"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agentshelf/connector-sdk": "workspace:^",
+    "@agentshelf/crawler": "workspace:^",
+    "@agentshelf/platform-detection": "workspace:^",
+    "@agentshelf/schema": "workspace:^",
+    "cheerio": "1.2.0",
+    "fast-xml-parser": "5.11.2",
+    "robots-parser": "3.0.1"
+  }
+}
