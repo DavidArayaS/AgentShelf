@@ -10,8 +10,8 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     }
   },
-  "globalEnv": ["BASE_SHA", "HEAD_SHA"]
+  "globalEnv": ["BASE_SHA", "HEAD_SHA", "CHROMIUM_EXECUTABLE"]
 }

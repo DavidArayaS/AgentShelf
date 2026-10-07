@@ -29,6 +29,8 @@
     "commander": "15.0.0",
     "@agentshelf/query-engine": "workspace:^",
     "@agentshelf/api": "workspace:^",
-    "@agentshelf/mcp": "workspace:^"
+    "@agentshelf/mcp": "workspace:^",
+    "@agentshelf/protocol-acp": "workspace:^",
+    "@agentshelf/protocol-ucp": "workspace:^"
   }
 }

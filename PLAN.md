@@ -2,7 +2,9 @@
 
 Status: pre-release implementation; no v1 or protocol compliance claim until all gates pass.
 
-First-commit status: workspace and local CLI/API/MCP product paths, canonical model, memory/SQLite storage, safe crawler, generic/WooCommerce connectors, validators/scoring, search, and version-pinned ACP/UCP adapters are implemented. The eight local quality gates pass in the current Node 24 environment. ACP/UCP claims apply only to the mapped feed/catalog schemas; they do not imply complete protocol conformance. Remaining v1 work includes the local web demo, reusable third-party connector conformance package, benchmark and branch-coverage targets, cross-platform CI evidence, built-package consumer verification, release SBOM/provenance, and the final acceptance review. This first commit is a useful pre-release foundation, not a v1 release.
+Implementation status: local CLI/API/MCP paths, web demo, canonical model, safe crawler, generic/WooCommerce connectors, validators/scoring/query, memory/SQLite storage, and pinned ACP/UCP catalog adapters are implemented. The follow-up adds reusable connector contracts and a complete example, actual browser acceptance, CLI export/serve acceptance, isolated packed-package consumption with private adapters, branch-coverage gates, performance benchmarks, OpenAPI/error hardening and release artifact/provenance workflows. The detailed requirements-to-evidence map is [docs/v1-readiness.md](docs/v1-readiness.md).
+
+Release status: pre-release candidate. Do not declare npm publication, clean-machine `npx` availability, a v1 tag, or current remote OS/CodeQL passes until independently verified. Registry ownership/trusted publishing and release approval remain maintainer operations. No private Cloud capabilities are included.
 
 ## Architecture and public boundaries
 

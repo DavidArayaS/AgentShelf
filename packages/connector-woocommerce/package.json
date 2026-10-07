@@ -34,5 +34,8 @@
     "@agentshelf/crawler": "workspace:^",
     "@agentshelf/schema": "workspace:^",
     "robots-parser": "3.0.1"
+  },
+  "devDependencies": {
+    "@agentshelf/testing": "workspace:^"
   }
 }

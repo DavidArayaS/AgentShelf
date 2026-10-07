@@ -4,6 +4,7 @@ import {
   CatalogSchema,
   AvailabilitySchema,
   type Catalog,
+  type Merchant,
   type Product,
   type ProductAttribute,
 } from '@agentshelf/schema';
@@ -65,6 +66,8 @@ export interface SearchResult {
   limit: number;
 }
 export interface QueryEngine {
+  replaceCatalog?(catalog: Catalog): Promise<void>;
+  getMerchant?(): Promise<Merchant>;
   searchProducts(query: SearchQuery): Promise<SearchResult>;
   getProduct(id: string): Promise<Product | undefined>;
 }
@@ -203,9 +206,15 @@ export function searchProducts(
   };
 }
 export class MemoryQueryEngine implements QueryEngine {
-  readonly #catalog: Catalog;
+  #catalog: Catalog;
   constructor(catalog: Catalog) {
     this.#catalog = CatalogSchema.parse(catalog);
+  }
+  async replaceCatalog(catalog: Catalog): Promise<void> {
+    this.#catalog = CatalogSchema.parse(catalog);
+  }
+  async getMerchant(): Promise<Merchant> {
+    return structuredClone(this.#catalog.merchant);
   }
   async searchProducts(query: SearchQuery): Promise<SearchResult> {
     return searchProducts(this.#catalog, query);

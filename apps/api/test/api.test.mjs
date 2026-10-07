@@ -91,3 +91,31 @@ test('local API enables only the configured browser origin and answers preflight
     );
   }
 });
+
+test('OpenAPI describes scan success and domain errors retain stable codes', async () => {
+  const server = await startApi({ catalog }, 0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const spec = await (await fetch(`${base}/openapi.json`)).json();
+    assert.ok(spec.paths['/v1/scans'].post.responses['201']);
+    assert.ok(
+      spec.paths['/v1/products/search'].get.parameters.some(
+        (p) => p.name === 'currency',
+      ),
+    );
+    const result = await fetch(`${base}/v1/scans`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url: 'http://127.0.0.1/' }),
+    });
+    assert.equal(result.status, 400);
+    assert.equal((await result.json()).error.code, 'UNSAFE_URL');
+    assert.equal(
+      (await fetch(`${base}/v1/products`, { method: 'OPTIONS' })).status,
+      403,
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

@@ -8,12 +8,33 @@ importers:
 
   .:
     devDependencies:
+      '@agentshelf/api':
+        specifier: workspace:^
+        version: link:apps/api
+      '@agentshelf/core':
+        specifier: workspace:^
+        version: link:packages/core
+      '@agentshelf/mcp':
+        specifier: workspace:^
+        version: link:packages/mcp
+      '@agentshelf/query-engine':
+        specifier: workspace:^
+        version: link:packages/query-engine
+      '@agentshelf/schema':
+        specifier: workspace:^
+        version: link:packages/schema
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:packages/testing
       '@biomejs/biome':
         specifier: 2.5.15
         version: 2.5.15
       '@changesets/cli':
         specifier: 3.0.3
         version: 3.0.3
+      '@modelcontextprotocol/client':
+        specifier: 2.3.1
+        version: 2.3.1
       '@secretlint/core':
         specifier: 13.0.7
         version: 13.0.7
@@ -35,6 +56,9 @@ importers:
       '@types/node':
         specifier: ^24.19.1
         version: 24.19.1
+      playwright-core:
+        specifier: 1.63.0
+        version: 1.63.0
       prettier:
         specifier: 3.9.9
         version: 3.9.9
@@ -47,6 +71,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@agentshelf/connector-sdk':
+        specifier: workspace:^
+        version: link:../../packages/connector-sdk
       '@agentshelf/core':
         specifier: workspace:^
         version: link:../../packages/core
@@ -56,6 +83,9 @@ importers:
       '@agentshelf/protocol-acp':
         specifier: workspace:^
         version: link:../../packages/protocol-acp
+      '@agentshelf/protocol-sdk':
+        specifier: workspace:^
+        version: link:../../packages/protocol-sdk
       '@agentshelf/protocol-ucp':
         specifier: workspace:^
         version: link:../../packages/protocol-ucp
@@ -68,6 +98,9 @@ importers:
       '@agentshelf/storage-memory':
         specifier: workspace:^
         version: link:../../packages/storage-memory
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   apps/cli:
     dependencies:
@@ -86,6 +119,12 @@ importers:
       '@agentshelf/mcp':
         specifier: workspace:^
         version: link:../../packages/mcp
+      '@agentshelf/protocol-acp':
+        specifier: workspace:^
+        version: link:../../packages/protocol-acp
+      '@agentshelf/protocol-ucp':
+        specifier: workspace:^
+        version: link:../../packages/protocol-ucp
       '@agentshelf/query-engine':
         specifier: workspace:^
         version: link:../../packages/query-engine
@@ -99,11 +138,33 @@ importers:
         specifier: 15.0.0
         version: 15.0.0
 
+  apps/web:
+    dependencies:
+      '@agentshelf/api':
+        specifier: workspace:^
+        version: link:../api
+      '@agentshelf/crawler':
+        specifier: workspace:^
+        version: link:../../packages/crawler
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:../../packages/testing
+
   examples/custom-connector:
     dependencies:
       '@agentshelf/connector-sdk':
         specifier: workspace:*
         version: link:../../packages/connector-sdk
+      '@agentshelf/crawler':
+        specifier: workspace:^
+        version: link:../../packages/crawler
+      '@agentshelf/schema':
+        specifier: workspace:^
+        version: link:../../packages/schema
+    devDependencies:
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:../../packages/testing
 
   packages/connector-generic-web:
     dependencies:
@@ -128,6 +189,10 @@ importers:
       robots-parser:
         specifier: 3.0.1
         version: 3.0.1
+    devDependencies:
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:../testing
 
   packages/connector-sdk:
     dependencies:
@@ -152,6 +217,10 @@ importers:
       robots-parser:
         specifier: 3.0.1
         version: 3.0.1
+    devDependencies:
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:../testing
 
   packages/core:
     dependencies:
@@ -276,6 +345,15 @@ importers:
       '@agentshelf/core':
         specifier: workspace:^
         version: link:../core
+      '@agentshelf/schema':
+        specifier: workspace:^
+        version: link:../schema
+
+  packages/testing:
+    dependencies:
+      '@agentshelf/connector-sdk':
+        specifier: workspace:^
+        version: link:../connector-sdk
       '@agentshelf/schema':
         specifier: workspace:^
         version: link:../schema
@@ -858,6 +936,11 @@ packages:
   pkce-challenge@5.0.1:
     resolution: {integrity: sha512-wQ0b/W4Fr01qtpHlqSqspcj3EhBvimsdh0KlHhH8HRZnMsEa0ea2fTULOXOS9ccQr3om+GcGRk4e+isrZWV8qQ==}
     engines: {node: '>=16.20.0'}
+
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   prettier@3.9.9:
     resolution: {integrity: sha512-Z/CJHIkdujO/OtN7nXUii0Rf3VT5SRuhjBA82Xvu2XhBUgX3nhP67T0LHceBdQLex7OOFGTox+Q5Yg8Jk2Qivg==}
@@ -1482,6 +1565,8 @@ snapshots:
   picomatch@4.0.7: {}
 
   pkce-challenge@5.0.1: {}
+
+  playwright-core@1.63.0: {}
 
   prettier@3.9.9: {}
 

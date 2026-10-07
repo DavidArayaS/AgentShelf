@@ -13,7 +13,8 @@ test('pnpm produces a nonempty transitive license inventory for installed toolin
   );
   const dependencies = auditLicenses(JSON.parse(output));
   const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-  for (const name of Object.keys(manifest.devDependencies)) {
+  for (const [name, version] of Object.entries(manifest.devDependencies)) {
+    if (version.startsWith('workspace:')) continue;
     assert.ok(
       dependencies.some((dependency) => dependency.name === name),
       `Missing direct dependency ${name}`,

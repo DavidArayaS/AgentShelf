@@ -5,3 +5,5 @@ coverage
 reports
 .turbo
 LICENSE
+packages/protocol-acp/spec/2026-04-17/**
+packages/protocol-ucp/spec/2026-08-25/**

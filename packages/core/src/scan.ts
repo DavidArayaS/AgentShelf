@@ -94,16 +94,31 @@ export async function scanStore(
     productsNormalized: 0,
   });
   logger.log('info', 'scan.started', { scanId });
-  const platform = await genericWebConnector.detect(target, context);
   const connectors = options.connectors ?? [
     wooCommerceConnector,
     genericWebConnector,
   ];
-  const connector =
-    connectors.find((candidate) =>
-      candidate.metadata.platforms.includes(platform.platform),
-    ) ??
-    connectors.find((candidate) => candidate.metadata.id === 'generic-web');
+  let platform: DetectionResult = {
+    platform: 'unknown',
+    confidence: 0,
+    signals: [],
+  };
+  let connector: CommerceConnector | undefined;
+  for (const candidate of connectors) {
+    const detected = await candidate.detect(target, context);
+    if (
+      detected.confidence >= platform.confidence &&
+      (!connector || detected.confidence > platform.confidence)
+    ) {
+      if (
+        candidate.metadata.platforms.includes(detected.platform) ||
+        candidate.metadata.id === 'generic-web'
+      ) {
+        platform = detected;
+        connector = candidate;
+      }
+    }
+  }
   if (!connector)
     throw new Error(`No connector registered for ${platform.platform}`);
   const products: Catalog['products'] = [];

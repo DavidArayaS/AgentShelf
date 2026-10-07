@@ -1,0 +1,35 @@
+{
+  "name": "@agentshelf/testing",
+  "version": "0.1.0",
+  "description": "Reusable offline fixtures and connector contracts",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidArayaS/AgentShelf.git",
+    "directory": "packages/testing"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agentshelf/schema": "workspace:^",
+    "@agentshelf/connector-sdk": "workspace:^"
+  }
+}

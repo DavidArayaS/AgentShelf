@@ -35,6 +35,9 @@
     "@agentshelf/protocol-ucp": "workspace:^",
     "@agentshelf/query-engine": "workspace:^",
     "@agentshelf/schema": "workspace:^",
-    "@agentshelf/storage-memory": "workspace:^"
+    "@agentshelf/storage-memory": "workspace:^",
+    "@agentshelf/protocol-sdk": "workspace:^",
+    "@agentshelf/connector-sdk": "workspace:^",
+    "zod": "4.6.5"
   }
 }

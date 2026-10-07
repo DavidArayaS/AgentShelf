@@ -86,3 +86,20 @@ test('rejects unsafe URL forms and contradictory rating/shipping ranges', () => 
     false,
   );
 });
+
+test('stable IDs are deterministic, scoped and insensitive to Unicode normalization', async () => {
+  const { stableId } = await import('../dist/index.js');
+  assert.equal(
+    stableId('merchant', 'https://example.com'),
+    stableId('merchant', 'https://example.com'),
+  );
+  assert.notEqual(stableId('merchant', 'one'), stableId('product', 'one'));
+  assert.notEqual(stableId('product', 'one'), stableId('product', 'two'));
+});
+
+test('identity normalization preserves canonical Unicode and rejects empty keys', async () => {
+  const { stableId } = await import('../dist/index.js');
+  assert.equal(stableId('product', 'café'), stableId('product', 'cafe\u0301'));
+  assert.throws(() => stableId('', 'key'));
+  assert.throws(() => stableId('product', ' '));
+});
