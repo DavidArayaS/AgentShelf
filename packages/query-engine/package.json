@@ -1,0 +1,35 @@
+{
+  "name": "@agentshelf/query-engine",
+  "version": "0.1.0",
+  "description": "AgentShelf query-engine public package",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidArayaS/AgentShelf.git",
+    "directory": "packages/query-engine"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agentshelf/schema": "workspace:^",
+    "zod": "4.6.5"
+  }
+}

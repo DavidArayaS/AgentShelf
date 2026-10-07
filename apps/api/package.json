@@ -1,0 +1,40 @@
+{
+  "name": "@agentshelf/api",
+  "version": "0.1.0",
+  "description": "AgentShelf api public package",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavidArayaS/AgentShelf.git",
+    "directory": "apps/api"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@agentshelf/core": "workspace:^",
+    "@agentshelf/crawler": "workspace:^",
+    "@agentshelf/protocol-acp": "workspace:^",
+    "@agentshelf/protocol-ucp": "workspace:^",
+    "@agentshelf/query-engine": "workspace:^",
+    "@agentshelf/schema": "workspace:^",
+    "@agentshelf/storage-memory": "workspace:^"
+  }
+}

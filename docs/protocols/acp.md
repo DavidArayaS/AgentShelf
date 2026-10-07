@@ -1,0 +1,7 @@
+# Agentic Commerce Protocol
+
+Target: official stable feed release **2026-04-17**. Checked 2026-10-07. Official repository: https://github.com/agentic-commerce-protocol/agentic-commerce-protocol at `7fdd78df677a94dce04c770644b0fbbb1401272b`. The official feed JSON Schema is vendored under `spec/2026-04-17/json-schema`, licensed Apache-2.0 under the included third-party license notice. `spec/SOURCE.json` records file names and SHA-256; contract tests recompute it. Feed output is validated against the exact official Draft 2020-12 schema with Ajv 8 and formats.
+
+Supported capability is the **catalog feed product document mapping** only. It maps catalog products, variants, exact ISO 4217 minor-unit prices, currency, availability, media, GTIN and category labels. When a catalog has multiple currencies, callers must choose one. Amounts with precision beyond the official currency's minor unit are rejected without rounding. Multiple seller offers cannot be collapsed into one feed price and therefore produce an explicit error.
+
+Unsupported: hosted feed creation/service API, authentication, ingestion/update/delete operations, checkout, carts, orders and payments. Schema validation of one feed JSON document is not full ACP service compliance. Merchant shipping, returns, ratings, provenance and attributes have no feed mapping here and are not silently represented as protocol support.
