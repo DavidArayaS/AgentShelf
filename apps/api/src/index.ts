@@ -303,7 +303,37 @@ export async function createApi(options: ApiOptions): Promise<Server> {
         ) {
           status = 502;
           code = error.code;
-          message = 'Unable to read public store data';
+          // Only expose known diagnostics, never arbitrary connector messages or URLs.
+          const httpFailure =
+            /^(Store|Sitemap|Product) returned HTTP ([1-5][0-9]{2})$|^robots\.txt unavailable \(([1-5][0-9]{2})\)$/.exec(
+              error.message,
+            );
+          if (httpFailure) {
+            const resource = httpFailure[1] ?? 'robots.txt';
+            const upstreamStatus = httpFailure[2] ?? httpFailure[3];
+            message = `${resource} returned HTTP ${upstreamStatus}. The store did not provide readable public data.`;
+          } else if (
+            [
+              'Request deadline exceeded',
+              'Store hostname could not be resolved',
+              'Connection to store failed; check network access and TLS',
+              'Response exceeds byte limit',
+              'Response is not valid UTF-8',
+              'Compressed responses are unsupported; server must honor identity encoding',
+              'Redirect cycle',
+              'Redirect limit exceeded',
+              'Redirect has no Location',
+              'Cross-origin discovery URL rejected',
+              'Sitemap too large',
+              'Sitemap DOCTYPE/entities are forbidden',
+              'Product is disallowed by robots.txt',
+            ].includes(error.message)
+          ) {
+            message = `Unable to read public store data: ${error.message}`;
+          } else {
+            message =
+              'Unable to read public store data. The connector could not read the public catalog.';
+          }
         } else if (
           error instanceof ZodError ||
           error instanceof SyntaxError ||

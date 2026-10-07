@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { ConnectorError } from '@agentshelf/connector-sdk';
+import { FetchError } from '@agentshelf/crawler';
 import { startApi } from '../dist/index.js';
 const catalog = JSON.parse(
   readFileSync(
@@ -117,5 +119,65 @@ test('OpenAPI describes scan success and domain errors retain stable codes', asy
   } finally {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('scan failures expose safe actionable diagnostics without leaking connector details', async () => {
+  const cases = [
+    [new ConnectorError('Store returned HTTP 403'), /Store returned HTTP 403/],
+    [
+      new ConnectorError('robots.txt unavailable (429)'),
+      /robots.txt returned HTTP 429/,
+    ],
+    [
+      new ConnectorError('Sitemap returned HTTP 503'),
+      /Sitemap returned HTTP 503/,
+    ],
+    [new FetchError('Request deadline exceeded'), /Request deadline exceeded/],
+    [
+      new FetchError('Response exceeds byte limit'),
+      /Response exceeds byte limit/,
+    ],
+    [
+      new FetchError('Store hostname could not be resolved'),
+      /hostname could not be resolved/,
+    ],
+    [
+      new ConnectorError('private credential or arbitrary upstream body'),
+      /connector could not read/,
+    ],
+  ];
+  for (const [error, expected] of cases) {
+    const server = await startApi(
+      {
+        catalog,
+        scanOptions: {
+          http: {
+            async get() {
+              throw error;
+            },
+          },
+        },
+      },
+      0,
+    );
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${server.address().port}/v1/scans`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ url: 'https://store.example/' }),
+        },
+      );
+      assert.equal(response.status, 502);
+      const body = await response.json();
+      assert.equal(body.error.code, error.code);
+      assert.match(body.error.message, expected);
+      assert.doesNotMatch(JSON.stringify(body), /private credential/);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
   }
 });
