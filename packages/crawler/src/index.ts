@@ -247,6 +247,22 @@ export class SafeHttpClient implements HttpClient {
         }
         return result;
       }
+    } catch (error) {
+      if (external?.aborted) throw error;
+      if (error instanceof FetchError || error instanceof UnsafeUrlError)
+        throw error;
+      const code =
+        error && typeof error === 'object' && 'code' in error
+          ? error.code
+          : undefined;
+      if (code === 'ENOTFOUND' || code === 'EAI_AGAIN')
+        throw new FetchError('Store hostname could not be resolved', {
+          cause: error,
+        });
+      throw new FetchError(
+        'Connection to store failed; check network access and TLS',
+        { cause: error },
+      );
     } finally {
       clearTimeout(timer);
       external?.removeEventListener('abort', abort);
