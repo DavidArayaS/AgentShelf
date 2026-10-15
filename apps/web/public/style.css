@@ -82,6 +82,7 @@ input {
   font: inherit;
   background: white;
   min-width: 0;
+  max-width: 100%;
 }
 .input-row input {
   flex: 1;
@@ -121,9 +122,8 @@ small {
   line-height: 1.5;
 }
 .result-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: block;
+  overflow-wrap: anywhere;
 }
 .metrics {
   display: grid;
@@ -218,4 +218,11 @@ footer {
   h1 {
     letter-spacing: -1px;
   }
+}
+
+#search-products article {
+  margin: 12px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 10px;
 }

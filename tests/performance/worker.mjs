@@ -1,25 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import { performance } from 'node:perf_hooks';
-import { readFileSync } from 'node:fs';
+import { generatePrivateCatalog } from '@agentshelf/testing';
 import { normalizeCatalog, validateCatalog } from '@agentshelf/core';
-import { searchProducts } from '@agentshelf/query-engine';
+import { searchProducts, MemoryQueryEngine } from '@agentshelf/query-engine';
 const size = Number(process.argv[2]);
 if (![100, 10000, 100000].includes(size))
   throw new Error('Unsupported benchmark size');
-const source = JSON.parse(
-  readFileSync(
-    new URL('../../examples/sample-catalog/catalog.json', import.meta.url),
-    'utf8',
-  ),
-);
-const catalog = {
-  ...source,
-  products: Array.from({ length: size }, (_, i) => ({
-    ...source.products[0],
-    id: `product-${i}`,
-    name: `Trail shoe ${i}`,
-  })),
-};
+const catalog = generatePrivateCatalog(size);
 const timings = {};
 function measure(name, action) {
   globalThis.gc?.();
@@ -36,8 +23,24 @@ measure('validation', () => validateCatalog(catalog).products.length);
 measure(
   'search',
   () =>
-    searchProducts(catalog, { query: 'shoe', maxPrice: 150, currency: 'USD' })
-      .total,
+    searchProducts(catalog, {
+      query: 'running shoes',
+      maxPrice: 150,
+      currency: 'USD',
+      availability: 'in_stock',
+    }).total,
+);
+measure('engineConstruction', () => {
+  new MemoryQueryEngine(catalog);
+  return size;
+});
+measure(
+  'filteredVariantSearch',
+  () =>
+    searchProducts(catalog, {
+      query: 'running shoes size 10 under $150',
+      availability: 'in_stock',
+    }).total,
 );
 measure('serialization', () => Buffer.byteLength(JSON.stringify(catalog)));
 console.log(

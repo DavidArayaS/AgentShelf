@@ -17,9 +17,13 @@ This is an implementation checklist for the supplied Open Core specification, no
 | Contracts/properties/security/integration (§31–37, §51)   | Reusable connector suite, complete external example, platform-specific pagination/duplicates/variants, malformed inputs and crawl→export→REST/MCP acceptance.          |
 | Coverage/CI/supply chain/releases (§38–41)                | Per-package coverage floors, OS matrix, audits, CodeQL, immutable Action revisions, tarball verification, CycloneDX SBOM and manual provenance publishing workflow.    |
 | Performance (§44)                                         | 100 / 10,000 / 100,000-product normalization, validation, search and serialization benchmark with memory reports.                                                      |
-| Documentation/developer experience (§47–50)               | `pnpm dev`, no-key offline demo, extension guides, release instructions, architecture docs and six ADRs.                                                               |
+| Documentation/developer experience (§47–50)               | `pnpm dev`, no-key offline demo, extension guides, release instructions, architecture docs and seven ADRs.                                                             |
 | Scope and execution discipline (§52–53, §57–60)           | Laptop-local monorepo, no mandatory AI providers or distributed services, PLAN.md and baseline quality gates.                                                          |
 | Final functional scenario (§61)                           | Offline end-to-end acceptance, CLI exports and actual CLI serving through REST and official MCP client. Public `npx` usage requires the release described below.       |
+
+## Acquisition and search master refactor
+
+The follow-up product-foundation requirements are mapped separately in [refactor acceptance](refactor-acceptance.md), including authorized WooCommerce, direct import, coverage evidence, private10k search and the final product questions. The underlying protocol, licensing, release and security requirements above remain in force.
 
 ## Commands and artifacts
 

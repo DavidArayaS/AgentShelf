@@ -34,3 +34,38 @@ test('protocol reporting derives exact supported versions from implemented adapt
   assert.notEqual(unsupported.status, 0);
   assert.match(unsupported.stderr, /Unsupported export format/);
 });
+
+test('import/search require no crawl and explicit structured filters are honored', () => {
+  const file = '../../examples/sample-catalog/catalog.json';
+  const imported = run(['--json', 'import', file]);
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.equal(JSON.parse(imported.stdout).acquisition.mode, 'direct_import');
+  const searched = run([
+    '--json',
+    'search',
+    file,
+    'running shoe',
+    '--max-price',
+    '100',
+    '--currency',
+    'USD',
+  ]);
+  assert.equal(searched.status, 0, searched.stderr);
+  assert.equal(JSON.parse(searched.stdout).total, 0);
+  const natural = run(['search', file, 'running shoe under $150']);
+  assert.equal(JSON.parse(natural.stdout).total, 1);
+  assert.notEqual(
+    run(['ingest', 'https://store.example', '--connector', 'unknown']).status,
+    0,
+  );
+  const missing = run([
+    '--json',
+    'ingest',
+    'https://store.example',
+    '--connector',
+    'woocommerce-admin',
+  ]);
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /ACCESS_RESTRICTED/);
+  assert.match(run(['ingest', '--help']).stdout, /merchant-authorized/);
+});

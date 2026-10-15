@@ -31,6 +31,8 @@
     "@agentshelf/api": "workspace:^",
     "@agentshelf/mcp": "workspace:^",
     "@agentshelf/protocol-acp": "workspace:^",
-    "@agentshelf/protocol-ucp": "workspace:^"
+    "@agentshelf/protocol-ucp": "workspace:^",
+    "@agentshelf/connector-woocommerce-admin": "workspace:^",
+    "@agentshelf/connector-sdk": "workspace:^"
   }
 }

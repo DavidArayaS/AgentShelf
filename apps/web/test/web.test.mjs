@@ -8,7 +8,7 @@ test('local demo serves assets, scans offline, exports and rejects cross-origin 
   try {
     const page = await fetch(base);
     assert.equal(page.status, 200);
-    assert.match(await page.text(), /Is your store ready/);
+    assert.match(await page.text(), /Connect your catalog/);
     assert.match(
       page.headers.get('content-security-policy'),
       /frame-ancestors 'none'/,

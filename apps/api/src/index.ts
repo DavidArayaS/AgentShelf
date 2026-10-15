@@ -18,6 +18,7 @@ import {
 } from '@agentshelf/storage-memory';
 import {
   scanStore,
+  importCatalog,
   CatalogValidationError,
   validateCatalog,
   type ScanOptions,
@@ -29,7 +30,11 @@ import {
   UnsafeUrlError,
   FetchError,
 } from '@agentshelf/crawler';
-import { ConnectorError, ProductParseError } from '@agentshelf/connector-sdk';
+import {
+  AcquisitionError,
+  ConnectorError,
+  ProductParseError,
+} from '@agentshelf/connector-sdk';
 import { ProtocolValidationError } from '@agentshelf/protocol-sdk';
 import { ZodError } from 'zod';
 import { openApi } from './openapi.js';
@@ -243,6 +248,21 @@ export async function createApi(options: ApiOptions): Promise<Server> {
           });
           return;
         }
+        if (request.method === 'POST' && path === '/v1/imports') {
+          if (!engine.replaceCatalog)
+            throw new ApiError(
+              'CATALOG_UPDATE_UNSUPPORTED',
+              'The configured query engine does not support catalog replacement',
+              409,
+            );
+          const report = await importCatalog(await readBody(request), {
+            catalogRepository: catalogs,
+          });
+          await engine.replaceCatalog(report.catalog);
+          activeCatalog = report.catalog;
+          send(response, 201, { schemaVersion: '1.0', report });
+          return;
+        }
         if (request.method === 'POST' && path === '/v1/validate') {
           send(response, 200, {
             schemaVersion: '1.0',
@@ -289,6 +309,17 @@ export async function createApi(options: ApiOptions): Promise<Server> {
           status = 400;
           code = error.code;
           message = 'URL is not a permitted public HTTP(S) destination';
+        } else if (error instanceof AcquisitionError) {
+          status = 502;
+          code = error.code;
+          message = {
+            ACCESS_RESTRICTED:
+              'Store access is restricted. Use a merchant-authorized connector or import a canonical catalog.',
+            RATE_LIMITED:
+              'The store rate limited acquisition. Partial results are retained when available.',
+            ROBOTS_DISALLOWED: 'Public discovery is disallowed by robots.txt.',
+            REMOTE_UNAVAILABLE: 'The remote store is unavailable.',
+          }[error.code];
         } else if (
           error instanceof ProtocolValidationError ||
           error instanceof CatalogValidationError ||

@@ -19,7 +19,12 @@ async function load(target: StoreTarget, context: ConnectorContext) {
   return CatalogSchema.parse(parseBoundedJson(response.body));
 }
 export const catalogConnector: CommerceConnector = {
-  metadata: { id: 'example-catalog', version: '0.1.0', platforms: ['custom'] },
+  metadata: {
+    id: 'example-catalog',
+    version: '0.1.0',
+    platforms: ['custom'],
+    acquisition: { mode: 'public_discovery', authority: 'public_observation' },
+  },
   async detect(target, context) {
     await load(target, context);
     return {

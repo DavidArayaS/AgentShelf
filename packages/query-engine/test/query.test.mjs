@@ -151,3 +151,80 @@ test('catalog replacement updates products and merchant atomically and isolates 
   await assert.rejects(engine.replaceCatalog({}));
   assert.equal((await engine.searchProducts({ query: 'updated' })).total, 1);
 });
+
+test('small query grammar enforces price constraints and preserves explicit filters', async () => {
+  const { interpretSearchQuery } = await import('../dist/index.js');
+  assert.deepEqual(interpretSearchQuery({ query: 'headphones under $200' }), {
+    query: 'headphones',
+    maxPrice: '200',
+    currency: 'USD',
+  });
+  assert.equal(
+    interpretSearchQuery({ query: 'shoe above $100' }).minPrice,
+    '100',
+  );
+  assert.equal(
+    interpretSearchQuery({ query: 'shoe below 150', currency: 'EUR' }).maxPrice,
+    '150',
+  );
+  assert.equal(
+    interpretSearchQuery({ query: 'shoe below 150' }).query,
+    'shoe below 150',
+  );
+  assert.equal(
+    interpretSearchQuery({
+      query: 'shoe under $150',
+      maxPrice: 100,
+      currency: 'EUR',
+    }).maxPrice,
+    100,
+  );
+  assert.equal(
+    interpretSearchQuery({
+      query: 'shoe in stock',
+      availability: 'out_of_stock',
+    }).availability,
+    'out_of_stock',
+  );
+  assert.equal(
+    interpretSearchQuery({
+      query: 'shoe size 10',
+      variantProperties: { size: '9' },
+    }).variantProperties.size,
+    '9',
+  );
+  assert.equal(interpretSearchQuery({}).query, '');
+  assert.equal(
+    searchProducts(catalog, { query: 'running shoe under $100' }).total,
+    0,
+  );
+  assert.equal(
+    searchProducts(catalog, { query: 'running shoe under $150' }).total,
+    1,
+  );
+  assert.equal(
+    searchProducts(catalog, { query: 'running shoe over $150' }).total,
+    0,
+  );
+  assert.equal(
+    searchProducts(catalog, { query: 'running shoe in stock' }).total,
+    1,
+  );
+  assert.equal(searchProducts(catalog, { merchantId: 'other' }).total, 0);
+  assert.equal(
+    searchProducts(catalog, { merchantId: catalog.merchant.id }).total,
+    1,
+  );
+  assert.equal(searchProducts(catalog, { shippingDestination: 'CR' }).total, 0);
+  const withShipping = structuredClone(catalog);
+  withShipping.merchant.shipping = {
+    destinations: ['CR'],
+    cost: null,
+    minDays: null,
+    maxDays: null,
+  };
+  assert.equal(
+    searchProducts(withShipping, { shippingDestination: 'CR' }).total,
+    1,
+  );
+});

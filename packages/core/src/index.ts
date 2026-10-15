@@ -64,7 +64,7 @@ export function normalizeCatalog(input: unknown): Catalog {
 }
 
 export { validateCatalog } from '@agentshelf/validators';
-export { scanStore } from './scan.js';
+export { scanStore, ingestStore } from './scan.js';
 export type {
   ScanOptions,
   ScanReport,
@@ -73,3 +73,6 @@ export type {
   EventSink,
   ScanEvent,
 } from './scan.js';
+
+export { importCatalog } from './import.js';
+export type { ImportReport, ImportOptions } from './import.js';

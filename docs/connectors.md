@@ -1,17 +1,37 @@
-# Writing a connector
+# Connectors for existing commerce systems
 
-A connector exports a `CommerceConnector` from `@agentshelf/connector-sdk`: stable metadata, `detect(target, context)`, bounded asynchronous `discoverProducts(target, context)`, and `fetchProduct(reference, target, context)` returning canonical products. Register it through `scanStore(url, { connectors: [connector] })`. The scanner evaluates registered connectors and selects a supported detection result by confidence; registration order breaks ties. Include the generic connector last if a fallback is desired. Detection failures propagate rather than silently masking network/security failures.
+Connectors adapt source systems into canonical commerce; they do not contain agent-protocol fields. Built-ins include public generic web, public WooCommerce Store API and authorized WooCommerce REST v3. Other detected platforms use compatible generic public surfaces until a dedicated connector is supplied. Detection does not promise complete extraction.
 
-Use only `context.http.get(url, context.signal)` for remote access. Production supplies SafeHttpClient; tests inject fixtures. Honor cancellation in discovery loops, enforce `context.limit`, keep source and product identities stable, preserve provenance, and avoid inventing missing prices or inventory. Merchant identities should use `stableId('merchant', new URL(target.url).origin)` to match the scanner's catalog ownership. Credentials are an optional injected provider; never log them or require them for the built-in v1 connectors.
+## Merchant-authorized WooCommerce
 
-The generic connector consumes robots, bounded nested sitemaps, JSON-LD, canonical links and metadata. WooCommerce uses public product surfaces, falling back to generic discovery when the public API is unavailable according to its documented statuses. Neither executes merchant JavaScript. Detection of another platform does not imply a dedicated extraction connector.
+Official source reviewed before implementation: [WooCommerce REST API v3 docs](https://woocommerce.github.io/woocommerce-rest-api-docs/), repository revision `09431ca9a114289d298fd2a5d5b604ea50f6d197`. Relevant official source: [authentication](https://github.com/woocommerce/woocommerce-rest-api-docs/blob/09431ca9a114289d298fd2a5d5b604ea50f6d197/source/includes/wp-api-v3/_authentication.md), [pagination](https://github.com/woocommerce/woocommerce-rest-api-docs/blob/09431ca9a114289d298fd2a5d5b604ea50f6d197/source/includes/wp-api-v3/_introduction.md), [products](https://github.com/woocommerce/woocommerce-rest-api-docs/blob/09431ca9a114289d298fd2a5d5b604ea50f6d197/source/includes/wp-api-v3/_products.md), [variations](https://github.com/woocommerce/woocommerce-rest-api-docs/blob/09431ca9a114289d298fd2a5d5b604ea50f6d197/source/includes/wp-api-v3/_product-variations.md) and [currency](https://github.com/woocommerce/woocommerce-rest-api-docs/blob/09431ca9a114289d298fd2a5d5b604ea50f6d197/source/includes/wp-api-v3/_data.md).
 
-The complete [public catalog example](../examples/custom-connector) reads `/catalog.json`, detects support, discovers and fetches products, handles failures/cancellation, and runs the shared toolkit without editing core.
+Create a WooCommerce REST API key with **Read** permission through the merchant's existing WooCommerce settings. Locally supply `AGENTSHELF_WC_CONSUMER_KEY` / `AGENTSHELF_WC_CONSUMER_SECRET` through your shell's secure environment mechanism. Never put real values in arguments, URLs, screenshots or Git. There is no AgentShelf-hosted credential storage or authorization callback.
+
+```bash
+node apps/cli/dist/index.js ingest https://your-store.com/ --connector woocommerce-admin --output=catalog.json
+node apps/cli/dist/index.js serve catalog.json
+```
+
+Use the WordPress store base URL (including its installation subdirectory if any), not a category/product URL. The adapter reads `wp-json/wc/v3/data/currencies/current`, ordered `products?per_page=100&page=N&status=any` and concrete product variations. It uses Basic authorization headers over validated HTTPS, never query-string credentials, and rejects every authenticated redirect. It makes no writes. Some hosting configurations strip authorization headers; correct the merchant's server configuration instead of moving secrets into URLs. Keys must have permission to read these endpoints.
+
+Read currency from the source; never assume USD. Map product/variant identities, SKU/GTIN when present, categories/brands/images/attributes, plain descriptions, exact decimal prices, stock status/quantity and reviews. Variable parents do not get an invented sellable offer; concrete variations carry their own price/availability. Missing inventory remains unknown. Shipping promises, return rules, plugin-specific multicurrency and arbitrary private metadata are not fabricated. See [coverage rules](acquisition-model.md). Tests use the official response contracts through deterministic fixtures; a real merchant credential/server check remains deployment-specific.
+
+## Extension contract
+
+`CommerceConnector` remains `metadata`, `detect(target, context)`, bounded asynchronous `discoverProducts(target, context)` and `fetchProduct(reference, target, context)`. Public metadata declares `{ mode: 'public_discovery', authority: 'public_observation' }`. Authorized metadata declares `{ mode: 'authorized_connector', authority: 'merchant_authorized' }`.
+
+Register public adapters with `scanStore(url, { connectors: [...] })`; selection uses supported detection confidence with registration order breaking ties. Authorized adapters are excluded from public detection. Explicitly select them using `ingestStore(url, { connector, credentials, ...ports })`. There is no implicit admin probe/fallback to public scanning when authorized access fails.
+
+Use `context.http.get(url, context.signal, options)` for remote access. Optional `options.authorization` requires HTTPS and prohibits redirects in SafeHttpClient. Production retains DNS validation/pinning, byte/time/rate bounds, URL validation and TLS verification; tests inject fixtures. Pass the signal, enforce limits, bound pagination and keep stable identities. Merchant ID is `stableId('merchant', new URL(target.url).origin)`. Never log provider values or serialize raw exceptions/response bodies. Built-in authorized errors are fixed safe diagnostics; orchestration sanitizes arbitrary private-adapter failures.
+
+Optional `context.reportEnumeration({ authenticated, expectedProducts, paginationExhausted })` records source evidence. Report exhaustion only after validating totals, unique identities and page termination. Core also checks normalized counts and failures before assigning coverage. Legacy connectors without acquisition metadata retain public-observation semantics. Product provenance describes each observation; catalog acquisition metadata describes coverage.
+
+The complete [public catalog example](../examples/custom-connector) illustrates a connector outside core. Community/private connectors can use:
 
 ```js
 import { runConnectorContractTests } from '@agentshelf/testing';
 import { myConnector, fixtureContext } from './your-fixture.js';
-
 runConnectorContractTests(
   myConnector,
   { url: 'https://fixture.example/' },
@@ -19,6 +39,4 @@ runConnectorContractTests(
 );
 ```
 
-`fixtureContext` is a factory returning a fresh ConnectorContext and a deterministic fixture HTTP client. Provide real representative discovery/product responses, including duplicate and paginated surfaces where applicable. The suite verifies detection, bounded unique discovery, stable canonical products, malformed/missing payload rejection, transport failures and cancellation. Add platform-specific variants, pagination, robots and source-format tests alongside it.
-
-Keep protocol fields, Cloud dependencies, SQL and billing out of connectors. Publish only deliberate export-map entry points, compiled artifacts, license/notice and necessary fixtures; use Apache-2.0-compatible dependencies.
+The factory supplies representative HTTP/context fixtures. Shared tests verify detection, bounded discovery, normalization, stable identities, malformed payloads, failures and cancellation. Authorized failures may expose a safe error code instead of the injected raw transport message. Add source-specific totals/pagination/variants/credential tests. The packaged private consumer injects a private connector, credential provider, repository and event sink without copying or patching core.

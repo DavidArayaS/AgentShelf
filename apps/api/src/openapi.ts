@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import { z } from 'zod';
-import { catalogJsonSchema, ProductSchema } from '@agentshelf/schema';
+import {
+  catalogJsonSchema,
+  ProductSchema,
+  AcquisitionMetadataSchema,
+} from '@agentshelf/schema';
 import { SearchQuerySchema } from '@agentshelf/query-engine';
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const object = (
@@ -42,6 +46,8 @@ const report = object({
   warnings: array(string),
   failures: number,
   catalog: ref('Catalog'),
+  acquisition: z.toJSONSchema(AcquisitionMetadataSchema),
+  issues: array(object({ code: string, message: string })),
   score: object({
     scoringVersion: string,
     overall: number,
@@ -180,7 +186,7 @@ export const openApi = {
     '/v1/scans': {
       post: operation(
         'scanStore',
-        'Scan at most 100 products; activate resulting catalog',
+        'Observe at most 100 public products; activate resulting catalog without claiming completeness',
         envelope({ scanId: string, report: ref('ScanReport') }),
         { status: 201, body: ref('ScanRequest') },
       ),
@@ -191,6 +197,20 @@ export const openApi = {
         'Read a stored scan report',
         envelope({ report: ref('ScanReport') }),
         { parameters: id },
+      ),
+    },
+    '/v1/imports': {
+      post: operation(
+        'importCatalog',
+        'Import a canonical document and activate it for search. Coverage describes only supplied data.',
+        envelope({
+          report: object({
+            catalog: ref('Catalog'),
+            acquisition: z.toJSONSchema(AcquisitionMetadataSchema),
+            score: report.properties.score,
+          }),
+        }),
+        { status: 201, body: ref('Catalog') },
       ),
     },
     '/v1/validate': {
