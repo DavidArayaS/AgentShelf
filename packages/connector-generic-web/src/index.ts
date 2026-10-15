@@ -14,6 +14,8 @@ import { parseBoundedJson, validateRemoteUrl } from '@agentshelf/crawler';
 import { detectPlatform } from '@agentshelf/platform-detection';
 import {
   ConnectorError,
+  AcquisitionError,
+  assertReadableResponse,
   ProductParseError,
   type CommerceConnector,
   type ConnectorContext,
@@ -260,7 +262,7 @@ async function robots(target: StoreTarget, context: ConnectorContext) {
     response.status !== 410 &&
     (response.status < 200 || response.status >= 300)
   )
-    throw new ConnectorError(`robots.txt unavailable (${response.status})`);
+    assertReadableResponse(response, 'robots.txt');
   return robotsParser(url, response.status === 200 ? response.body : '');
 }
 export const genericWebConnector: CommerceConnector = {
@@ -268,15 +270,20 @@ export const genericWebConnector: CommerceConnector = {
     id: 'generic-web',
     version: '0.1.0',
     platforms: ['custom', 'unknown'],
+    acquisition: { mode: 'public_discovery', authority: 'public_observation' },
   },
   async detect(target, context) {
     const response = await context.http.get(target.url, context.signal);
-    if (response.status !== 200)
-      throw new ConnectorError(`Store returned HTTP ${response.status}`);
+    if (response.status !== 200) assertReadableResponse(response, 'Store');
     return detectPlatform(response.body, response.headers);
   },
   async *discoverProducts(target, context) {
     const policy = await robots(target, context);
+    if (policy.isAllowed(target.url, 'AgentShelf') === false)
+      throw new AcquisitionError(
+        'ROBOTS_DISALLOWED',
+        'Store is disallowed by robots.txt',
+      );
     const queue = (
       policy.getSitemaps().length
         ? policy.getSitemaps()
@@ -291,18 +298,27 @@ export const genericWebConnector: CommerceConnector = {
     ) {
       context.signal?.throwIfAborted();
       const item = queue[index];
-      if (!item || item.depth > context.maxDepth) continue;
-      const url = sameOrigin(item.url, target.url);
-      if (visited.has(url) || policy.isAllowed(url, 'AgentShelf') === false)
+      if (!item) continue;
+      if (item.depth > context.maxDepth) {
+        context.reportEnumeration?.({ truncated: true });
         continue;
+      }
+      const url = sameOrigin(item.url, target.url);
+      if (visited.has(url)) continue;
+      if (policy.isAllowed(url, 'AgentShelf') === false) {
+        context.reportEnumeration?.({ truncated: true });
+        continue;
+      }
       visited.add(url);
       const response = await context.http.get(url, context.signal);
       if (response.status === 404) continue;
-      if (response.status !== 200)
-        throw new ConnectorError(`Sitemap returned HTTP ${response.status}`);
+      if (response.status !== 200) assertReadableResponse(response, 'Sitemap');
       const map = parseSitemap(response.body, 10000);
       for (const nested of map.sitemaps) {
-        if (queue.length >= context.maxSitemaps * 2) break;
+        if (queue.length >= context.maxSitemaps * 2) {
+          context.reportEnumeration?.({ truncated: true });
+          break;
+        }
         queue.push({
           url: sameOrigin(nested, target.url),
           depth: item.depth + 1,
@@ -320,15 +336,19 @@ export const genericWebConnector: CommerceConnector = {
         if (products.size >= context.limit) return;
       }
     }
+    if (visited.size >= context.maxSitemaps && queue.length > visited.size)
+      context.reportEnumeration?.({ truncated: true });
   },
   async fetchProduct(reference: ProductReference, target, context) {
     const url = sameOrigin(reference.url, target.url);
     const policy = await robots(target, context);
     if (policy.isAllowed(url, 'AgentShelf') === false)
-      throw new ConnectorError('Product is disallowed by robots.txt');
+      throw new AcquisitionError(
+        'ROBOTS_DISALLOWED',
+        'Product is disallowed by robots.txt',
+      );
     const response = await context.http.get(url, context.signal);
-    if (response.status !== 200)
-      throw new ConnectorError(`Product returned HTTP ${response.status}`);
+    if (response.status !== 200) assertReadableResponse(response, 'Product');
     return extractProduct(response.body, response.url, target, context);
   },
 };

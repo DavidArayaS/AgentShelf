@@ -181,3 +181,67 @@ test('scan failures expose safe actionable diagnostics without leaking connector
     }
   }
 });
+
+test('import activates source-independent search and reports merchant-provided unknown coverage', async () => {
+  const server = await startApi({ catalog }, 0);
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const result = await fetch(`${base}/v1/imports`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(catalog),
+    });
+    assert.equal(result.status, 201);
+    const { report } = await result.json();
+    assert.equal(report.acquisition.mode, 'direct_import');
+    assert.equal(report.acquisition.coverage.status, 'unknown');
+    const searched = await (
+      await fetch(
+        `${base}/v1/products/search?query=running%20shoe%20under%20%24100`,
+      )
+    ).json();
+    assert.equal(searched.total, 0);
+    const exported = await (await fetch(`${base}/v1/exports/json`)).json();
+    assert.equal(exported.acquisition.mode, 'direct_import');
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+test('public denial uses ACCESS_RESTRICTED and no remote response body is returned', async () => {
+  const server = await startApi(
+    {
+      catalog,
+      scanOptions: {
+        http: {
+          async get(url) {
+            return {
+              url,
+              status: 403,
+              body: 'remote-private-message',
+              headers: {},
+            };
+          },
+        },
+      },
+    },
+    0,
+  );
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/v1/scans`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url: 'https://store.example/' }),
+      },
+    );
+    const body = await response.json();
+    assert.equal(body.error.code, 'ACCESS_RESTRICTED');
+    assert.match(body.error.message, /merchant-authorized/);
+    assert.doesNotMatch(JSON.stringify(body), /remote-private/);
+  } finally {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

@@ -141,3 +141,53 @@ test('DNS deadline and mixed DNS rebinding answers fail closed', async () => {
     /deadline/,
   );
 });
+
+test('authorization stays on HTTPS and no authenticated redirect is followed', async () => {
+  const authorization = 'Basic Zml4dHVyZTpub3QtYS1yZWFsLWtleQ==';
+  for (const location of [
+    '/next',
+    'https://other.example/next',
+    'http://shop.example/next',
+  ]) {
+    mock.restoreAll();
+    const seen = fakeNetwork([{ status: 302, headers: { location } }]);
+    await assert.rejects(
+      new SafeHttpClient({ minIntervalMs: 0 }).get(
+        'https://shop.example/',
+        undefined,
+        { authorization },
+      ),
+      /Authenticated redirects/,
+    );
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].options.headers.authorization, authorization);
+  }
+  mock.restoreAll();
+  const seen = fakeNetwork([]);
+  await assert.rejects(
+    new SafeHttpClient().get('http://shop.example/', undefined, {
+      authorization,
+    }),
+    /HTTPS/,
+  );
+  await assert.rejects(
+    new SafeHttpClient().get('https://shop.example/', undefined, {
+      authorization: 'bad\r\nheader',
+    }),
+    /valid header/,
+  );
+  assert.equal(seen.length, 0);
+});
+test('network failures expose fixed safe messages while cancellation remains distinct', async () => {
+  fakeNetwork([]);
+  for (const code of ['ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED']) {
+    mock.method(dns, 'lookup', async () => {
+      throw Object.assign(new Error('private transport details'), { code });
+    });
+    syncBuiltinESMExports();
+    await assert.rejects(
+      new SafeHttpClient().get('https://shop.example/'),
+      (e) => e.code === 'FETCH_ERROR' && !e.message.includes('private'),
+    );
+  }
+});

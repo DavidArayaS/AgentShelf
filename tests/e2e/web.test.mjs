@@ -27,6 +27,35 @@ test('browser scans offline demo, renders validation and downloads supported pro
       /Waterproof Trail Shoe/,
     );
     assert.match(await page.locator('#categories').textContent(), /pricing/);
+    assert.match(
+      await page.locator('#acquisition').textContent(),
+      /Public discovery/,
+    );
+    assert.match(await page.locator('#coverage').textContent(), /UNKNOWN/);
+    await page
+      .locator('#catalog-file')
+      .setInputFiles('examples/sample-catalog/catalog.json');
+    await page
+      .getByRole('button', { name: 'Import catalog', exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector('#acquisition')
+        .textContent.includes('Direct import'),
+    );
+    await page.locator('#search-query').fill('running shoe under $150');
+    await page
+      .getByRole('button', { name: 'Search products', exact: true })
+      .click();
+    await page.waitForFunction(() =>
+      document
+        .querySelector('#search-status')
+        .textContent.includes('1 matching'),
+    );
+    assert.match(
+      await page.locator('#search-products').textContent(),
+      /Waterproof Trail Shoe/,
+    );
     for (const format of ['JSON', 'ACP', 'UCP']) {
       const download = page.waitForEvent('download');
       await page

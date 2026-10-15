@@ -103,3 +103,74 @@ test('identity normalization preserves canonical Unicode and rejects empty keys'
   assert.throws(() => stableId('', 'key'));
   assert.throws(() => stableId('product', ' '));
 });
+
+test('acquisition claims require matching authority, counts and evidence; public completeness is forbidden', async () => {
+  const { AcquisitionMetadataSchema, CatalogSchema } =
+    await import('../dist/index.js');
+  const complete = {
+    mode: 'authorized_connector',
+    authority: 'merchant_authorized',
+    connectorId: 'fixture',
+    authenticated: true,
+    acquiredAt: '2026-10-01T00:00:00Z',
+    coverage: {
+      status: 'complete',
+      reason: 'All authorized resources enumerated',
+      observedProducts: 2,
+      expectedProducts: 2,
+      paginationExhausted: true,
+      limitReached: false,
+      truncated: false,
+      failures: 0,
+    },
+  };
+  assert.ok(AcquisitionMetadataSchema.safeParse(complete).success);
+  for (const update of [
+    { expectedProducts: 3 },
+    { failures: 1 },
+    { limitReached: true },
+    { truncated: true },
+    { paginationExhausted: false },
+  ])
+    assert.equal(
+      AcquisitionMetadataSchema.safeParse({
+        ...complete,
+        coverage: { ...complete.coverage, ...update },
+      }).success,
+      false,
+    );
+  assert.equal(
+    AcquisitionMetadataSchema.safeParse({
+      ...complete,
+      mode: 'public_discovery',
+      authority: 'public_observation',
+      authenticated: false,
+    }).success,
+    false,
+  );
+  assert.equal(
+    AcquisitionMetadataSchema.safeParse({
+      ...complete,
+      authority: 'merchant_provided',
+    }).success,
+    false,
+  );
+  assert.equal(
+    AcquisitionMetadataSchema.safeParse({
+      ...complete,
+      mode: 'direct_import',
+      authenticated: true,
+    }).success,
+    false,
+  );
+  const sample = JSON.parse(
+    readFileSync(
+      new URL('../../../examples/sample-catalog/catalog.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.equal(
+    CatalogSchema.safeParse({ ...sample, acquisition: complete }).success,
+    false,
+  );
+});

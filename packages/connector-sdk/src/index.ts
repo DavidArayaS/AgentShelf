@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-import { ProductSchema, UrlSchema, type Product } from '@agentshelf/schema';
+import {
+  ProductSchema,
+  UrlSchema,
+  type Product,
+  type AcquisitionMode,
+  type CatalogAuthority,
+} from '@agentshelf/schema';
 export interface DetectionSignal {
   type: 'html' | 'header' | 'url';
   value: string;
@@ -33,6 +39,11 @@ export interface ConnectorMetadata {
   id: string;
   version: string;
   platforms: readonly Platform[];
+  /** Omitted only for compatibility with pre-refactor public connectors. */
+  acquisition?: {
+    mode: Exclude<AcquisitionMode, 'direct_import'>;
+    authority: Exclude<CatalogAuthority, 'merchant_provided'>;
+  };
 }
 export interface Clock {
   now(): Date;
@@ -56,8 +67,52 @@ export interface HttpResponse {
   headers: Readonly<Record<string, string>>;
   body: string;
 }
+export interface HttpRequestOptions {
+  /** Only HTTPS; transports must refuse redirects when this is present. */
+  authorization?: string;
+}
+export interface EnumerationEvidence {
+  authenticated?: boolean;
+  expectedProducts?: number;
+  paginationExhausted?: boolean;
+  truncated?: boolean;
+}
+export type AccessFailureCode =
+  | 'ROBOTS_DISALLOWED'
+  | 'ACCESS_RESTRICTED'
+  | 'RATE_LIMITED'
+  | 'REMOTE_UNAVAILABLE';
+export class AcquisitionError extends Error {
+  constructor(
+    readonly code: AccessFailureCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'AcquisitionError';
+  }
+}
+/** Do not include remote bodies, URLs, or credentials in errors. */
+export function assertReadableResponse(
+  response: HttpResponse,
+  resource = 'Store',
+): void {
+  if (response.status >= 200 && response.status < 300) return;
+  const code: AccessFailureCode = [401, 403].includes(response.status)
+    ? 'ACCESS_RESTRICTED'
+    : response.status === 429
+      ? 'RATE_LIMITED'
+      : 'REMOTE_UNAVAILABLE';
+  throw new AcquisitionError(
+    code,
+    `${resource} returned HTTP ${response.status}`,
+  );
+}
 export interface HttpClient {
-  get(url: string, signal?: AbortSignal): Promise<HttpResponse>;
+  get(
+    url: string,
+    signal?: AbortSignal,
+    options?: HttpRequestOptions,
+  ): Promise<HttpResponse>;
 }
 export interface ConnectorContext {
   http: HttpClient;
@@ -68,6 +123,7 @@ export interface ConnectorContext {
   maxSitemaps: number;
   maxDepth: number;
   credentials?: ConnectorCredentialProvider;
+  reportEnumeration?(evidence: EnumerationEvidence): void;
 }
 export interface CommerceConnector {
   metadata: ConnectorMetadata;

@@ -36,5 +36,9 @@
     "@agentshelf/crawler": "workspace:^",
     "@agentshelf/validators": "workspace:^",
     "@agentshelf/scoring": "workspace:^"
+  },
+  "devDependencies": {
+    "@agentshelf/testing": "workspace:^",
+    "@agentshelf/connector-woocommerce-admin": "workspace:^"
   }
 }

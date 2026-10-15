@@ -5,6 +5,8 @@ import { parseBoundedJson, validateRemoteUrl } from '@agentshelf/crawler';
 import { genericWebConnector } from '@agentshelf/connector-generic-web';
 import {
   ConnectorError,
+  AcquisitionError,
+  assertReadableResponse,
   ProductParseError,
   type CommerceConnector,
   type ConnectorContext,
@@ -37,13 +39,16 @@ async function fetchPublic(
   const robotsUrl = new URL('/robots.txt', target.url).href;
   const response = await context.http.get(robotsUrl, context.signal);
   if (![200, 404, 410].includes(response.status))
-    throw new ConnectorError('robots.txt unavailable');
+    assertReadableResponse(response, 'robots.txt');
   const policy = robotsParser(
     robotsUrl,
     response.status === 200 ? response.body : '',
   );
   if (policy.isAllowed(url, 'AgentShelf') === false)
-    throw new ConnectorError('API disallowed by robots.txt');
+    throw new AcquisitionError(
+      'ROBOTS_DISALLOWED',
+      'API disallowed by robots.txt',
+    );
   return context.http.get(url, context.signal);
 }
 export function normalizeWooProduct(
@@ -145,7 +150,12 @@ export function normalizeWooProduct(
   return result.data;
 }
 export const wooCommerceConnector: CommerceConnector = {
-  metadata: { id: 'woocommerce', version: '0.1.0', platforms: ['woocommerce'] },
+  metadata: {
+    id: 'woocommerce',
+    version: '0.1.0',
+    platforms: ['woocommerce'],
+    acquisition: { mode: 'public_discovery', authority: 'public_observation' },
+  },
   detect: genericWebConnector.detect,
   async *discoverProducts(target, context) {
     const seen = new Set<string>();
@@ -160,9 +170,7 @@ export const wooCommerceConnector: CommerceConnector = {
         return;
       }
       if (response.status !== 200)
-        throw new ConnectorError(
-          `WooCommerce returned HTTP ${response.status}`,
-        );
+        assertReadableResponse(response, 'WooCommerce');
       const products = parseBoundedJson(response.body);
       if (!Array.isArray(products))
         throw new ProductParseError(
@@ -191,9 +199,7 @@ export const wooCommerceConnector: CommerceConnector = {
       context,
     );
     if (response.status !== 200)
-      throw new ConnectorError(
-        `WooCommerce product returned HTTP ${response.status}`,
-      );
+      assertReadableResponse(response, 'WooCommerce product');
     return normalizeWooProduct(
       parseBoundedJson(response.body),
       target,

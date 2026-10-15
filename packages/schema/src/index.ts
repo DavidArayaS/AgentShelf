@@ -93,7 +93,14 @@ export const SourceProvenanceSchema = z.object({
   url: UrlSchema,
   connector: text,
   observedAt: timestamp,
-  method: z.enum(['structured_data', 'public_api', 'metadata', 'import']),
+  method: z.enum([
+    'structured_data',
+    'public_api',
+    'authorized_api',
+    'merchant_feed',
+    'metadata',
+    'import',
+  ]),
   warnings: z.array(z.string().max(2000)).max(100).default([]),
 });
 export const OfferSchema = z
@@ -177,6 +184,81 @@ export const ProductSchema = z
         });
     }
   });
+/** Catalog-level observation semantics, independent of individual product provenance. */
+export const AcquisitionModeSchema = z.enum([
+  'public_discovery',
+  'authorized_connector',
+  'direct_import',
+]);
+export const CatalogAuthoritySchema = z.enum([
+  'public_observation',
+  'merchant_authorized',
+  'merchant_provided',
+]);
+export const CatalogCoverageSchema = z.enum(['unknown', 'partial', 'complete']);
+export const AcquisitionMetadataSchema = z
+  .object({
+    mode: AcquisitionModeSchema,
+    authority: CatalogAuthoritySchema,
+    connectorId: text,
+    authenticated: z.boolean(),
+    coverage: z.object({
+      status: CatalogCoverageSchema,
+      reason: z.string().min(1).max(2000),
+      observedProducts: z.number().int().nonnegative().max(100000),
+      expectedProducts: z.number().int().nonnegative().safe().optional(),
+      paginationExhausted: z.boolean().optional(),
+      limitReached: z.boolean(),
+      truncated: z.boolean(),
+      failures: z.number().int().nonnegative(),
+    }),
+    acquiredAt: timestamp,
+  })
+  .superRefine((value, context) => {
+    const expectedAuthority = {
+      public_discovery: 'public_observation',
+      authorized_connector: 'merchant_authorized',
+      direct_import: 'merchant_provided',
+    }[value.mode];
+    if (
+      value.authority !== expectedAuthority ||
+      (value.mode !== 'authorized_connector' && value.authenticated)
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Acquisition mode and authority must agree',
+      });
+    if (
+      value.coverage.status === 'complete' &&
+      (value.mode !== 'authorized_connector' ||
+        !value.authenticated ||
+        value.coverage.paginationExhausted !== true ||
+        value.coverage.expectedProducts !== value.coverage.observedProducts ||
+        value.coverage.failures !== 0 ||
+        value.coverage.limitReached ||
+        value.coverage.truncated)
+    )
+      context.addIssue({
+        code: 'custom',
+        message:
+          'Complete coverage requires authenticated authoritative enumeration evidence',
+      });
+    if (
+      (value.coverage.failures > 0 ||
+        value.coverage.limitReached ||
+        value.coverage.truncated) &&
+      value.coverage.status !== 'partial'
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Interrupted acquisition must be partial',
+      });
+  });
+export type AcquisitionMode = z.infer<typeof AcquisitionModeSchema>;
+export type CatalogAuthority = z.infer<typeof CatalogAuthoritySchema>;
+export type CatalogCoverage = z.infer<typeof CatalogCoverageSchema>;
+export type AcquisitionMetadata = z.infer<typeof AcquisitionMetadataSchema>;
+
 export const CatalogSchema = z
   .object({
     schemaVersion: z.literal(SCHEMA_VERSION),
@@ -184,8 +266,18 @@ export const CatalogSchema = z
     merchant: MerchantSchema,
     products: z.array(ProductSchema).max(100000),
     generatedAt: timestamp,
+    acquisition: AcquisitionMetadataSchema.optional(),
   })
   .superRefine((catalog, context) => {
+    if (
+      catalog.acquisition &&
+      catalog.acquisition.coverage.observedProducts !== catalog.products.length
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['acquisition'],
+        message: 'Observed count must match catalog products',
+      });
     if (
       new Set(catalog.products.map((product) => product.id)).size !==
       catalog.products.length

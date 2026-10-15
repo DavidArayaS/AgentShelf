@@ -8,6 +8,7 @@
       "@agentshelf/connector-generic-web",
       "@agentshelf/connector-sdk",
       "@agentshelf/connector-woocommerce",
+      "@agentshelf/connector-woocommerce-admin",
       "@agentshelf/core",
       "@agentshelf/crawler",
       "@agentshelf/mcp",

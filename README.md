@@ -1,8 +1,8 @@
 # AgentShelf
 
-**The open commerce layer for AI agents.** Make ecommerce catalogs discoverable, understandable and queryable by AI.
+**The open commerce layer for AI agents.**
 
-AgentShelf connects public commerce data to a vendor-neutral catalog, deterministic validation and search, and REST, MCP, ACP and UCP interfaces. Run it on a laptop with no account or API keys. The Agent Commerce Score measures data readiness; it does not predict recommendations or ranking in any agent.
+AgentShelf connects existing commerce systems to AI agents without requiring merchants to rebuild their stores. Public discovery, merchant-authorized connectors and canonical JSON imports converge into one vendor-neutral catalog, readiness analysis and deterministic search, exposed through REST, MCP, ACP and UCP. Run locally without an AgentShelf account; authorized connectors use your existing store’s read-only credentials. The Agent Commerce Score measures data readiness; it does not predict recommendations or ranking in any agent.
 
 This repository is a pre-release Open Core candidate. Publication and the v1 tag are separate release steps; do not assume the npm name is available until the verified release is published. See [acceptance evidence](docs/v1-readiness.md).
 
@@ -15,18 +15,41 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Open **http://127.0.0.1:3000** and select **Try demo store**. The reserved `https://demo.example/` URL uses bundled fixtures, so this scan works without Internet after dependencies are installed. Enter a real public store URL to use the safe crawler. The local web demo shows scores, products, validation issues and JSON/ACP/UCP downloads. It has no accounts, billing or hosted monitoring.
+Open **http://127.0.0.1:3000** and select **Try demo store**. The reserved `https://demo.example/` URL uses bundled fixtures, so this scan works without Internet after dependencies are installed. Enter a real public store URL to use the safe crawler. Public discovery is an observation, never proof of complete inventory. The local web demo also imports canonical JSON, searches acquired products, and shows acquisition, authority, coverage, readiness and JSON/ACP/UCP downloads. It has no accounts, billing or hosted monitoring.
 
 For CLI use from the repository root:
 
 ```bash
 pnpm build
-node apps/cli/dist/index.js validate examples/sample-catalog/catalog.json
-node apps/cli/dist/index.js search examples/sample-catalog/catalog.json "waterproof shoe"
-node apps/cli/dist/index.js serve examples/sample-catalog/catalog.json
+node apps/cli/dist/index.js import examples/sample-catalog/catalog.json --output=catalog.json
+node apps/cli/dist/index.js search catalog.json 'running shoe under $150'
+node apps/cli/dist/index.js serve catalog.json
 ```
 
 `serve` starts REST at `http://127.0.0.1:3001` and MCP Streamable HTTP at `http://127.0.0.1:3002/mcp`. Visit `/health` or `/v1/products/search?query=waterproof` on the REST server. Press Ctrl+C to stop. Returned data is JSON; the visual interface is started separately with `pnpm dev`.
+
+## Connect an existing WooCommerce store
+
+Use a merchant-generated **read-only** WooCommerce REST API key. Set `AGENTSHELF_WC_CONSUMER_KEY` and `AGENTSHELF_WC_CONSUMER_SECRET` in your local environment; do not put credentials in URLs, CLI arguments or files committed to Git.
+
+```bash
+node apps/cli/dist/index.js ingest https://your-store.com/ --connector woocommerce-admin --output=catalog.json
+node apps/cli/dist/index.js search catalog.json 'wireless headphones' --max-price 200 --currency USD --availability in_stock
+node apps/cli/dist/index.js serve catalog.json
+```
+
+This reads the existing store; products continue to be managed in WooCommerce. The connector uses HTTPS Basic authorization, current store currency, product totals/pages and concrete variation offers. It does not write to the store. Complete coverage requires consistent enumeration evidence; an authorized connection by itself does not prove completeness. The default local cap is 100,000 products; `--limit 100` intentionally restricts acquisition. See [authorized connector setup and limitations](docs/connectors.md).
+
+## Try search with a private 10,000-product catalog
+
+```bash
+pnpm fixture:generate
+node apps/cli/dist/index.js import reports/private-catalog.json --output=reports/imported-catalog.json
+node apps/cli/dist/index.js search reports/imported-catalog.json 'running shoes size 10 under $150' --availability in_stock
+node apps/cli/dist/index.js serve reports/imported-catalog.json
+```
+
+The seeded synthetic catalog contains categories, brands, multiple currencies, variants, inventory and deliberate missing information. This workflow requires no public crawling. Import validates and analyzes the supplied document; it does not claim to know the merchant’s full inventory. [Search contract and supported query grammar](docs/search.md).
 
 ## Scan and export a store
 
@@ -46,6 +69,8 @@ node apps/cli/dist/index.js export catalog.json --format=ucp --currency=USD
 node apps/cli/dist/index.js protocols
 ```
 
+For public scans, coverage is `unknown` or `partial`, and readiness describes observed products. Blocked/rate-limited access is reported with stable codes; no bypass is attempted.
+
 Every command supports `--help`. Use the global `--json` option for structured scan output and errors. `export` refuses to overwrite existing output files. Missing protocol-required data, ambiguous currencies and unrepresentable offers produce errors instead of fabricated values. The CLI also provides `detect` and `inspect`. Real merchant scans require public network access; the reserved demo domain is simulated only by the web demo and test fixtures.
 
 After an authorized npm release, the equivalent entry point is `npx agentshelf`. Until then use the checked-out build above.
@@ -53,18 +78,20 @@ After an authorized npm release, the equivalent entry point is `npx agentshelf`.
 ## How it works
 
 ```text
-public store → safe connector → canonical catalog → validation and score
-                                                 → shared query → REST / MCP
-                                                 → JSON / ACP / UCP exports
+existing retail systems
+  → public discovery / authorized connectors / direct imports / private connectors
+  → canonical catalog → normalization / validation / readiness
+                      → shared query → REST / MCP
+                      → JSON / ACP / UCP exports
 ```
 
 The canonical schema owns commerce concepts, not vendor protocols or database structures. Connectors understand source platforms. Protocol adapters consume canonical data. The web application renders API results and contains no scoring, normalization or search logic.
 
 ## REST and MCP
 
-REST provides `/openapi.json`, `/health`, `/v1/scans`, `/v1/scans/{id}`, `/v1/catalogs/{id}`, `/v1/products`, `/v1/products/{id}`, `/v1/products/search`, `/v1/validate` and `/v1/exports/{json,acp,ucp}`. Requests and canonical responses are documented in OpenAPI 3.1. Errors carry stable codes and request IDs. JSON request bodies are limited to 1 MiB; local API scans are limited to 100 products.
+REST provides `/openapi.json`, `/health`, `/v1/scans`, `/v1/scans/{id}`, `/v1/imports`, `/v1/catalogs/{id}`, `/v1/products`, `/v1/products/{id}`, `/v1/products/search`, `/v1/validate` and `/v1/exports/{json,acp,ucp}`. Requests and canonical responses are documented in OpenAPI 3.1. Errors carry stable codes and request IDs. JSON request bodies are limited to 1 MiB; local API scans are limited to 100 products.
 
-MCP exposes `search_products`, `get_product`, `check_availability`, `get_shipping_information`, `get_return_policy` and `get_store_information`, using the official SDK and protocol revision **2026-07-28**. REST and MCP share the QueryEngine. In `serve`, a successful API scan updates both interfaces. Injected query engines may support `replaceCatalog`; scanning through the API is rejected if the injected engine cannot activate the resulting catalog.
+MCP exposes `search_products`, `get_product`, `check_availability`, `get_shipping_information`, `get_return_policy` and `get_store_information`, using the official SDK and protocol revision **2026-07-28**. REST and MCP share the QueryEngine. In `serve`, a successful API scan or import updates both interfaces. Injected query engines may support `replaceCatalog`; scanning through the API is rejected if the injected engine cannot activate the resulting catalog.
 
 The servers bind to loopback. Browser origins are rejected by the standalone API unless explicitly configured. The web demo enforces same-origin access and proxies only its local API routes. Availability is a source observation, not a reservation.
 
@@ -76,7 +103,7 @@ Memory and SQLite repositories implement injectable catalog and scan ports. Loca
 
 ## Connectors and extension guides
 
-v1 targets generic structured web pages and public WooCommerce surfaces. Platform detection also recognizes other major ecommerce systems, which can use the generic connector when their public data is compatible. Detection is not a promise of a dedicated connector.
+Built-in adapters cover generic structured web pages, public WooCommerce surfaces and merchant-authorized WooCommerce REST v3. Direct canonical imports require no connector. Platform detection also recognizes other major ecommerce systems, which can use the generic connector when their public data is compatible. Detection is not a promise of a dedicated connector.
 
 - [Writing a connector and reusable contracts](docs/connectors.md)
 - [Complete external connector example](examples/custom-connector)

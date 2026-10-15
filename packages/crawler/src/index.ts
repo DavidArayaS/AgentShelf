@@ -17,8 +17,15 @@ export interface HttpResponse {
   headers: Readonly<Record<string, string>>;
   body: string;
 }
+export interface HttpRequestOptions {
+  authorization?: string;
+}
 export interface HttpClient {
-  get(url: string, signal?: AbortSignal): Promise<HttpResponse>;
+  get(
+    url: string,
+    signal?: AbortSignal,
+    options?: HttpRequestOptions,
+  ): Promise<HttpResponse>;
 }
 export interface FetchLimits {
   timeoutMs: number;
@@ -105,6 +112,7 @@ async function requestPinned(
   address: { address: string; family: 4 | 6 },
   signal: AbortSignal,
   maxBytes: number,
+  authorization?: string,
 ): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
     const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
@@ -115,6 +123,7 @@ async function requestPinned(
         headers: {
           'user-agent':
             'AgentShelf/0.1 (+https://github.com/DavidArayaS/AgentShelf)',
+          ...(authorization ? { authorization } : {}),
           'accept-encoding': 'identity',
           accept: 'text/html, application/json, application/xml, text/plain',
         },
@@ -194,12 +203,22 @@ export class SafeHttpClient implements HttpClient {
       throw new FetchError('Unsafe fetch limits');
   }
   /** Serial requests enforce a per-client concurrency cap of one and a global start-rate limit. */
-  get(input: string, external?: AbortSignal): Promise<HttpResponse> {
-    const operation = this.#tail.then(() => this.#get(input, external));
+  get(
+    input: string,
+    external?: AbortSignal,
+    options?: HttpRequestOptions,
+  ): Promise<HttpResponse> {
+    const operation = this.#tail.then(() =>
+      this.#get(input, external, options),
+    );
     this.#tail = operation.catch(() => {});
     return operation;
   }
-  async #get(input: string, external?: AbortSignal): Promise<HttpResponse> {
+  async #get(
+    input: string,
+    external?: AbortSignal,
+    options?: HttpRequestOptions,
+  ): Promise<HttpResponse> {
     const controller = new AbortController();
     const abort = () => controller.abort(external?.reason);
     external?.addEventListener('abort', abort, { once: true });
@@ -217,6 +236,13 @@ export class SafeHttpClient implements HttpClient {
     try {
       signal.throwIfAborted();
       let url = validateRemoteUrl(input);
+      if (
+        options?.authorization &&
+        (url.protocol !== 'https:' || /[\r\n]/.test(options.authorization))
+      )
+        throw new UnsafeUrlError(
+          'Authorization requires HTTPS and a valid header',
+        );
       const seen = new Set<string>();
       for (let redirects = 0; ; redirects++) {
         if (seen.has(url.href)) throw new FetchError('Redirect cycle');
@@ -234,10 +260,18 @@ export class SafeHttpClient implements HttpClient {
         signal.throwIfAborted();
         this.#lastRequest = Date.now();
         const result = await Promise.race([
-          requestPinned(url, address, signal, this.limits.maxBytes),
+          requestPinned(
+            url,
+            address,
+            signal,
+            this.limits.maxBytes,
+            options?.authorization,
+          ),
           aborted,
         ]);
         if ([301, 302, 303, 307, 308].includes(result.status)) {
+          if (options?.authorization)
+            throw new FetchError('Authenticated redirects are forbidden');
           if (redirects >= this.limits.maxRedirects)
             throw new FetchError('Redirect limit exceeded');
           if (!result.headers.location)

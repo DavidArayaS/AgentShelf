@@ -110,7 +110,12 @@ export function runConnectorContractTests(
     };
     await assert.rejects(
       collect(connector.discoverProducts(target, context)),
-      /fixture timeout/,
+      (error: unknown) =>
+        connector.metadata.acquisition?.mode === 'authorized_connector'
+          ? error instanceof Error &&
+            'code' in error &&
+            error.code === 'REMOTE_UNAVAILABLE'
+          : error instanceof Error && /fixture timeout/.test(error.message),
     );
   });
   test(`${connector.metadata.id}: cancellation stops discovery`, async () => {
@@ -125,7 +130,14 @@ export function runConnectorContractTests(
     };
     await assert.rejects(
       collect(connector.discoverProducts(target, context)),
-      /fixture cancelled/,
+      (error: unknown) =>
+        error === context.signal?.reason ||
+        (connector.metadata.acquisition?.mode === 'authorized_connector'
+          ? error instanceof Error &&
+            'code' in error &&
+            error.code === 'REMOTE_UNAVAILABLE' &&
+            context.signal?.aborted === true
+          : error instanceof Error && /fixture cancelled/.test(error.message)),
     );
   });
 }
@@ -135,3 +147,10 @@ async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
   for await (const item of items) result.push(item);
   return result;
 }
+
+export { generatePrivateCatalog } from './inventory.js';
+export {
+  createWooAdminFixture,
+  wooFixtureCredentials,
+  wooFixtureUrl,
+} from './woocommerce-admin.js';

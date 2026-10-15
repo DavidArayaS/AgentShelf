@@ -16,14 +16,14 @@ The package graph follows consumer → dependency:
 - connector-sdk → schema; target, context, discovery and extraction contracts.
 - crawler → transport and parsers; bounded, SSRF-resistant remote access.
 - platform-detection → connector-sdk; deterministic evidence-based detection.
-- connector-generic-web / connector-woocommerce → connector-sdk, crawler, schema.
+- connector-generic-web / connector-woocommerce / connector-woocommerce-admin → connector-sdk, crawler, schema.
 - validators → schema; stable rule IDs and evidence.
 - scoring → validators; configurable, versioned deterministic weights.
 - query-engine → schema; one search/filter/sort implementation shared by REST and MCP.
-- storage-memory / storage-sqlite → storage → schema; infrastructure stays outside domain logic.
+- storage-memory / storage-sqlite → schema and core repository types; infrastructure stays outside domain logic.
 - core → the above ports; normalization and scan orchestration, with injectable dependencies.
-- protocol-json / protocol-acp / protocol-ucp → protocol-sdk → schema.
-- apps/cli, apps/api, apps/mcp, apps/web → public package entry points only.
+- protocol-acp / protocol-ucp → protocol-sdk → schema; canonical JSON uses schema directly.
+- apps/cli, apps/api, apps/web and packages/mcp → public package entry points only.
 - testing → connector-sdk; reusable third-party conformance tests.
 
 Create packages only when their first real implementation exists. Export maps expose deliberate entry points, never internal source trees. Packages build to JavaScript with declaration files; Cloud must import built artifacts without source aliases or patches.
@@ -91,3 +91,11 @@ Official specifications may not expose a stable catalog protocol matching the re
 - Do vendor protocols leak into the model? No: adapters depend on canonical data, never the reverse.
 
 Any failing gate blocks advancement. Record actual progress and blockers without relabeling partial implementation as v1.
+
+## Acquisition and search foundation refactor
+
+The product is a neutral commerce layer adapting existing merchant systems, with two equal responsibilities: ingestion/normalization and source-independent search/agent interfaces. Three input modes converge into canonical data: public discovery, authorized connector and direct import. Public completeness is forbidden; authority and coverage are independent catalog-level metadata.
+
+Delivered by this refactor: acquisition schemas/report semantics; public access restriction codes and partial results; explicit `ingestStore` and read-only `@agentshelf/connector-woocommerce-admin`; `importCatalog`; CLI ingest/import/search filters and small deterministic query grammar; seeded diverse 10k inventory; QueryEngine/REST/MCP equivalence and real CLI acceptance; web import/search and truthful acquisition/readiness labels; credential/redirect tests; private built-package adapter consumption; ADR 0007 and guides. See [REFACTOR_PLAN.md](REFACTOR_PLAN.md) for exact change boundaries.
+
+No merchant migration or manual duplicate catalog maintenance is required. No production credential store, hosted sync, webhook worker, semantic search, cross-merchant infrastructure, accounts or billing were added. Final local gates and external release limitations are recorded in [refactor acceptance](docs/refactor-acceptance.md). A real authorized WooCommerce deployment and GitHub OS matrix remain independent checks.

@@ -26,7 +26,8 @@
     "packages:check": "pnpm build && node scripts/packages.mjs",
     "test:coverage": "pnpm build && node scripts/coverage.mjs",
     "benchmark": "pnpm build && node tests/performance/run.mjs",
-    "sbom:generate": "pnpm licenses:check && pnpm sbom --sbom-format cyclonedx --sbom-spec-version 1.6 --out reports/sbom.json"
+    "sbom:generate": "pnpm licenses:check && pnpm sbom --sbom-format cyclonedx --sbom-spec-version 1.6 --out reports/sbom.json",
+    "fixture:generate": "pnpm build && node scripts/generate-catalog.mjs"
   },
   "devDependencies": {
     "@agentshelf/api": "workspace:^",
@@ -48,6 +49,9 @@
     "playwright-core": "1.63.0",
     "prettier": "3.9.9",
     "turbo": "2.11.7",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "@agentshelf/connector-woocommerce-admin": "workspace:^",
+    "@agentshelf/protocol-acp": "workspace:^",
+    "@agentshelf/protocol-ucp": "workspace:^"
   }
 }

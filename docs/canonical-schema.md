@@ -5,3 +5,5 @@
 Availability uses `unknown`; inventory quantities, offer prices, shipping costs/times, returns acceptance/window and aggregate ratings may be explicitly null. Empty arrays mean no observations, not a guarantee of absence. Provenance records source, connector, extraction method and observed time. Category paths and typed attributes preserve normalized commerce semantics without platform/protocol fields.
 
 Zod parsing strips unknown object fields for forward-tolerant reads. Producers must not depend on unsupported fields surviving read/write cycles. JSON Schema describes structure, while Zod also enforces merchant ownership, unique identities and range relationships; JSON Schema alone is insufficient to certify a catalog. Bound arrays/strings protect consumers, but transport byte limits remain mandatory.
+
+Catalog optionally carries validated `acquisition` metadata (mode, authority and evidence-based coverage), separate from product `provenance`. Existing catalogs without it remain valid. Public observation can never claim complete coverage. Provenance additionally accepts `authorized_api` and `merchant_feed`. See [acquisition model](acquisition-model.md).

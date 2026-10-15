@@ -8,8 +8,15 @@ import { startApi } from '@agentshelf/api';
 import { startMcp, MCP_SUPPORT } from '@agentshelf/mcp';
 import { CatalogSchema } from '@agentshelf/schema';
 import { searchProducts, MemoryQueryEngine } from '@agentshelf/query-engine';
-import { scanStore, validateCatalog } from '@agentshelf/core';
+import {
+  scanStore,
+  ingestStore,
+  importCatalog,
+  validateCatalog,
+} from '@agentshelf/core';
 import { SafeHttpClient, parseBoundedJson } from '@agentshelf/crawler';
+import { wooCommerceAdminConnector } from '@agentshelf/connector-woocommerce-admin';
+import type { ScanReport } from '@agentshelf/core';
 import { genericWebConnector } from '@agentshelf/connector-generic-web';
 const program = new Command()
   .name('agentshelf')
@@ -43,7 +50,7 @@ program
   );
 program
   .command('scan <url>')
-  .description('Scan up to 100 public product pages')
+  .description('Public discovery; catalog completeness is never guaranteed')
   .option('--limit <count>', 'Maximum products', '100')
   .action(async (url, options) => {
     const report = await scanStore(url, {
@@ -62,14 +69,85 @@ program
     });
     if (program.opts().json) output(report);
     else {
-      console.log(
-        `AgentShelf\n\nPlatform: ${report.platform.platform}\nProducts: ${report.productsNormalized}\nAgent Commerce Score: ${report.score.overall} / 100\n`,
-      );
+      printReport(report);
       for (const [category, score] of Object.entries(report.score.categories))
         console.log(`${category.padEnd(24)} ${score}`);
       if (report.failures)
         console.error(`${report.failures} product extractions failed.`);
     }
+  });
+function printReport(
+  report: Pick<ScanReport, 'acquisition' | 'score'> &
+    Partial<Pick<ScanReport, 'platform' | 'issues'>>,
+): void {
+  const { acquisition, score } = report;
+  const coverage = acquisition.coverage;
+  console.log(
+    `AgentShelf\n\n${report.platform ? `Platform: ${report.platform.platform}\n` : ''}Acquisition: ${acquisition.mode}\nAuthority: ${acquisition.authority}\nProducts observed: ${coverage.observedProducts}\nExpected products: ${coverage.expectedProducts ?? 'unknown'}\nCoverage: ${coverage.status.toUpperCase()}\nFailures: ${coverage.failures}\n${coverage.reason}\n${coverage.status === 'complete' ? 'Catalog Readiness' : 'Observed Catalog Readiness'}: ${score.overall} / 100`,
+  );
+  for (const issue of report.issues ?? [])
+    console.error(`${issue.code}: ${issue.message}`);
+}
+program
+  .command('ingest <url>')
+  .description(
+    'Read an existing store using merchant-authorized read-only access',
+  )
+  .requiredOption(
+    '--connector <id>',
+    'Authorized connector (woocommerce-admin)',
+  )
+  .option(
+    '--limit <count>',
+    'Maximum products (local safety cap 100000)',
+    '100000',
+  )
+  .option('--output <file>', 'Write canonical catalog JSON without credentials')
+  .action(async (url, options) => {
+    if (options.connector !== 'woocommerce-admin')
+      throw new Error('Unknown authorized connector');
+    const report = await ingestStore(url, {
+      connector: wooCommerceAdminConnector,
+      limit: Number(options.limit),
+      credentials: {
+        async get(id, origin) {
+          if (id !== 'woocommerce-admin' || origin !== new URL(url).origin)
+            return undefined;
+          const consumerKey = process.env.AGENTSHELF_WC_CONSUMER_KEY;
+          const consumerSecret = process.env.AGENTSHELF_WC_CONSUMER_SECRET;
+          return consumerKey && consumerSecret
+            ? { consumerKey, consumerSecret }
+            : undefined;
+        },
+      },
+    });
+    if (options.output)
+      await writeFile(
+        options.output,
+        `${JSON.stringify(report.catalog, null, 2)}\n`,
+        { flag: 'wx' },
+      );
+    if (program.opts().json) output(report);
+    else printReport(report);
+  });
+program
+  .command('import <catalog>')
+  .description(
+    'Validate and import a local canonical JSON document; no crawling',
+  )
+  .option('--output <file>', 'Write normalized canonical JSON to a new file')
+  .action(async (input, options) => {
+    if (/^https?:\/\//.test(input))
+      throw new Error('Import expects a local canonical JSON file');
+    const report = await importCatalog(await readInput(input));
+    if (options.output)
+      await writeFile(
+        options.output,
+        `${JSON.stringify(report.catalog, null, 2)}\n`,
+        { flag: 'wx' },
+      );
+    if (program.opts().json) output(report);
+    else printReport(report);
   });
 program
   .command('inspect <url>')
@@ -113,12 +191,55 @@ program
   });
 program
   .command('search <catalog> <query>')
-  .description('Search a normalized catalog')
-  .action(async (catalog, query) =>
+  .description(
+    'Search any canonical catalog, independently of its acquisition source',
+  )
+  .option('--min-price <amount>', 'Minimum offer price')
+  .option('--max-price <amount>', 'Maximum offer price')
+  .option(
+    '--currency <code>',
+    'ISO currency; required for structured price filters',
+  )
+  .option('--availability <status>', 'Availability status')
+  .option('--brand <name>', 'Brand')
+  .option('--category <name>', 'Category name or ID')
+  .option('--merchant <id>', 'Merchant ID')
+  .option('--attributes <json>', 'Product attributes as a JSON object')
+  .option('--variants <json>', 'Variant properties as a JSON object')
+  .option('--shipping-destination <country>', 'ISO shipping destination')
+  .option(
+    '--sort <order>',
+    'relevance, name, price_asc, price_desc',
+    'relevance',
+  )
+  .option('--limit <count>', 'Result limit', '50')
+  .option('--offset <count>', 'Result offset', '0')
+  .action(async (catalog, query, options) => {
+    const filters: Record<string, unknown> = {
+      query,
+      sort: options.sort,
+      limit: Number(options.limit),
+      offset: Number(options.offset),
+    };
+    for (const name of [
+      'minPrice',
+      'maxPrice',
+      'currency',
+      'availability',
+      'shippingDestination',
+    ])
+      if (options[name] !== undefined) filters[name] = options[name];
+    if (options.brand) filters.brands = [options.brand];
+    if (options.category) filters.categories = [options.category];
+    if (options.merchant) filters.merchantId = options.merchant;
+    if (options.attributes)
+      filters.attributes = parseBoundedJson(options.attributes, 8192);
+    if (options.variants)
+      filters.variantProperties = parseBoundedJson(options.variants, 8192);
     output(
-      searchProducts(CatalogSchema.parse(await readInput(catalog)), { query }),
-    ),
-  );
+      searchProducts(CatalogSchema.parse(await readInput(catalog)), filters),
+    );
+  });
 program
   .command('serve <catalog>')
   .description('Serve a local catalog over REST and MCP')
@@ -187,7 +308,15 @@ try {
   const message = error instanceof Error ? error.message : 'Unexpected failure';
   console.error(
     program.opts().json
-      ? JSON.stringify({ error: { code: 'COMMAND_FAILED', message } })
+      ? JSON.stringify({
+          error: {
+            code:
+              error && typeof error === 'object' && 'code' in error
+                ? error.code
+                : 'COMMAND_FAILED',
+            message,
+          },
+        })
       : `AgentShelf: ${message}`,
   );
   process.exitCode = 1;

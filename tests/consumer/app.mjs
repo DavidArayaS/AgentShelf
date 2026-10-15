@@ -1,63 +1,120 @@
 // SPDX-License-Identifier: Apache-2.0
 import assert from 'node:assert/strict';
-import { scanStore, normalizeCatalog, validateCatalog } from '@agentshelf/core';
-import { searchProducts } from '@agentshelf/query-engine';
+import {
+  ingestStore,
+  importCatalog,
+  normalizeCatalog,
+  validateCatalog,
+} from '@agentshelf/core';
+import { MemoryQueryEngine } from '@agentshelf/query-engine';
 import { genericWebConnector } from '@agentshelf/connector-generic-web';
-import { createDemoHttp, demoUrl } from '@agentshelf/testing';
+import {
+  createDemoHttp,
+  demoUrl,
+  createWooAdminFixture,
+  wooFixtureCredentials,
+  wooFixtureUrl,
+} from '@agentshelf/testing';
+import { wooCommerceAdminConnector } from '@agentshelf/connector-woocommerce-admin';
 import { exportAcpCatalog } from '@agentshelf/protocol-acp';
 import { exportUcpCatalog } from '@agentshelf/protocol-ucp';
-const saved = new Map(),
+// Test doubles of private implementations: no encrypted storage or Postgres is implemented in OSS.
+class PrivateEncryptedCredentialProvider {
+  reads = 0;
+  async get() {
+    this.reads++;
+    return { example: 'fixture' };
+  }
+}
+class PrivatePostgresCatalogRepository {
+  saved = new Map();
+  async save(catalog) {
+    this.saved.set(catalog.id, catalog);
+  }
+  async get(id) {
+    return this.saved.get(id);
+  }
+  async list() {
+    return [...this.saved.values()];
+  }
+}
+class PrivateEventSink {
   events = [];
-let credentialReads = 0;
-const connector = {
-  ...genericWebConnector,
-  metadata: { id: 'private-test', version: '1.0.0', platforms: ['custom'] },
+  emit(event) {
+    this.events.push(event.type);
+  }
+}
+class PrivateConnector {
+  metadata = {
+    id: 'private-test',
+    version: '1.0.0',
+    platforms: ['custom'],
+    acquisition: {
+      mode: 'authorized_connector',
+      authority: 'merchant_authorized',
+    },
+  };
+  detect = genericWebConnector.detect;
+  async *discoverProducts(target, context) {
+    yield* genericWebConnector.discoverProducts(target, context);
+    context.reportEnumeration({
+      expectedProducts: 1,
+      authenticated: true,
+      paginationExhausted: true,
+    });
+  }
   async fetchProduct(ref, target, context) {
     assert.equal(
-      (await context.credentials.get('private-test', target.url)).example,
+      (
+        await context.credentials.get(
+          'private-test',
+          new URL(target.url).origin,
+        )
+      ).example,
       'fixture',
     );
     return genericWebConnector.fetchProduct(ref, target, context);
-  },
-};
-const report = await scanStore(demoUrl, {
-  connectors: [connector],
+  }
+}
+const repository = new PrivatePostgresCatalogRepository(),
+  events = new PrivateEventSink(),
+  credentials = new PrivateEncryptedCredentialProvider();
+const report = await ingestStore(demoUrl, {
+  connector: new PrivateConnector(),
   http: createDemoHttp(),
+  credentials,
+  eventSink: events,
+  catalogRepository: repository,
+});
+const catalog = normalizeCatalog(report.catalog);
+assert.equal(report.acquisition.coverage.status, 'complete');
+assert.equal(validateCatalog(catalog).products.length, 1);
+assert.equal(
+  (await new MemoryQueryEngine(catalog).searchProducts({ query: 'waterproof' }))
+    .total,
+  1,
+);
+assert.equal((await importCatalog(catalog)).acquisition.mode, 'direct_import');
+assert.equal(exportAcpCatalog(catalog).products.length, 1);
+assert.equal((await exportUcpCatalog(catalog)).products.length, 1);
+assert.equal(credentials.reads, 1);
+assert.equal(repository.saved.size, 1);
+assert.deepEqual(events.events, ['started', 'product', 'completed']);
+const authorized = await ingestStore(wooFixtureUrl, {
+  connector: wooCommerceAdminConnector,
+  http: createWooAdminFixture(3),
   credentials: {
     async get() {
-      credentialReads++;
-      return { example: 'fixture' };
-    },
-  },
-  eventSink: {
-    emit(event) {
-      events.push(event.type);
-    },
-  },
-  catalogRepository: {
-    async save(catalog) {
-      saved.set(catalog.id, catalog);
-    },
-    async get(id) {
-      return saved.get(id);
-    },
-    async list() {
-      return [...saved.values()];
+      return wooFixtureCredentials;
     },
   },
 });
-const catalog = normalizeCatalog(report.catalog);
-assert.equal(validateCatalog(catalog).products.length, 1);
-assert.equal(searchProducts(catalog, { query: 'waterproof' }).total, 1);
-assert.equal(exportAcpCatalog(catalog).products.length, 1);
-assert.equal((await exportUcpCatalog(catalog)).products.length, 1);
-assert.equal(credentialReads, 1);
-assert.equal(saved.size, 1);
-assert.deepEqual(events, ['started', 'product', 'completed']);
+assert.equal(authorized.productsNormalized, 3);
+assert.equal(authorized.acquisition.coverage.status, 'complete');
 await assert.rejects(
   import('@agentshelf/core/src/index.js'),
-  (error) => error.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+  (e) => e.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED',
 );
 console.log(
-  'Private consumer imports packaged exports and injects repositories, events, credentials and connectors without patches.',
+  'Private consumer uses packaged exports and injects private credential, repository, event and connector adapters without patches.',
 );

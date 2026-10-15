@@ -29,6 +29,11 @@ export const SearchQuerySchema = z
       .regex(/^[A-Z]{3}$/)
       .optional(),
     availability: AvailabilitySchema.optional(),
+    merchantId: z.string().min(1).max(512).optional(),
+    shippingDestination: z
+      .string()
+      .regex(/^[A-Z]{2}$/)
+      .optional(),
     categories: z.array(z.string().max(200)).max(100).optional(),
     brands: z.array(z.string().max(200)).max(100).optional(),
     attributes: properties.optional(),
@@ -98,21 +103,53 @@ function matchesProperties(
     )
   );
 }
+/** Small documented grammar, not general natural-language understanding. Explicit filters win. */
+export function interpretSearchQuery(input: SearchQuery): SearchQuery {
+  let text = input.query ?? '';
+  const inferred: SearchQuery = { ...input };
+  text = text.replace(
+    /\b(under|below|over|above)\s*(\$?)(\d+(?:\.\d{1,6})?)\b/gi,
+    (match, direction: string, dollar: string, price: string) => {
+      if (!dollar && !input.currency) return match;
+      const key = /under|below/i.test(direction) ? 'maxPrice' : 'minPrice';
+      if (inferred[key] === undefined) inferred[key] = price;
+      inferred.currency ??= 'USD';
+      return '';
+    },
+  );
+  text = text.replace(
+    /\bsize\s+(\d+(?:\.\d+)?)\b/gi,
+    (_match, size: string) => {
+      inferred.variantProperties = { size, ...inferred.variantProperties };
+      return '';
+    },
+  );
+  text = text.replace(/\bin stock\b/gi, () => {
+    inferred.availability ??= 'in_stock';
+    return '';
+  });
+  return { ...inferred, query: text.trim() };
+}
 const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 /** Pure deterministic search. Related availability and price filters must match the same offer. */
 export function searchProducts(
   catalog: Catalog,
   input: SearchQuery = {},
 ): SearchResult {
-  const query = SearchQuerySchema.parse(input);
-  const normalized = fold(query.query ?? '').replace(
-    /\b(?:under|below|over|above)\s*\$?\d+(?:\.\d+)?/g,
-    '',
-  );
+  const query = SearchQuerySchema.parse(interpretSearchQuery(input));
+  const normalized = fold(query.query ?? '');
   const tokens = normalized.match(/[\p{L}\p{N}]+/gu) ?? [];
   const rows: { product: Product; relevance: number; price: bigint | null }[] =
     [];
   for (const product of catalog.products) {
+    if (query.merchantId && product.merchantId !== query.merchantId) continue;
+    if (
+      query.shippingDestination &&
+      !(product.shipping ?? catalog.merchant.shipping)?.destinations.includes(
+        query.shippingDestination,
+      )
+    )
+      continue;
     if (
       query.brands?.length &&
       !query.brands.some((brand) => fold(brand) === fold(product.brand ?? ''))
@@ -164,6 +201,9 @@ export function searchProducts(
         product.brand,
         ...product.categories.map((c) => c.name),
         ...product.attributes.map((a) => `${a.name} ${a.value}`),
+        ...variants.flatMap((variant) =>
+          variant.attributes.map((a) => `${a.name} ${a.value}`),
+        ),
       ].join(' '),
     );
     if (!tokens.every((token) => searchable.includes(token))) continue;

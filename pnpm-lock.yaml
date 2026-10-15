@@ -11,12 +11,21 @@ importers:
       '@agentshelf/api':
         specifier: workspace:^
         version: link:apps/api
+      '@agentshelf/connector-woocommerce-admin':
+        specifier: workspace:^
+        version: link:packages/connector-woocommerce-admin
       '@agentshelf/core':
         specifier: workspace:^
         version: link:packages/core
       '@agentshelf/mcp':
         specifier: workspace:^
         version: link:packages/mcp
+      '@agentshelf/protocol-acp':
+        specifier: workspace:^
+        version: link:packages/protocol-acp
+      '@agentshelf/protocol-ucp':
+        specifier: workspace:^
+        version: link:packages/protocol-ucp
       '@agentshelf/query-engine':
         specifier: workspace:^
         version: link:packages/query-engine
@@ -110,6 +119,12 @@ importers:
       '@agentshelf/connector-generic-web':
         specifier: workspace:^
         version: link:../../packages/connector-generic-web
+      '@agentshelf/connector-sdk':
+        specifier: workspace:^
+        version: link:../../packages/connector-sdk
+      '@agentshelf/connector-woocommerce-admin':
+        specifier: workspace:^
+        version: link:../../packages/connector-woocommerce-admin
       '@agentshelf/core':
         specifier: workspace:^
         version: link:../../packages/core
@@ -222,6 +237,22 @@ importers:
         specifier: workspace:^
         version: link:../testing
 
+  packages/connector-woocommerce-admin:
+    dependencies:
+      '@agentshelf/connector-sdk':
+        specifier: workspace:^
+        version: link:../connector-sdk
+      '@agentshelf/crawler':
+        specifier: workspace:^
+        version: link:../crawler
+      '@agentshelf/schema':
+        specifier: workspace:^
+        version: link:../schema
+    devDependencies:
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:../testing
+
   packages/core:
     dependencies:
       '@agentshelf/connector-generic-web':
@@ -245,6 +276,13 @@ importers:
       '@agentshelf/validators':
         specifier: workspace:^
         version: link:../validators
+    devDependencies:
+      '@agentshelf/connector-woocommerce-admin':
+        specifier: workspace:^
+        version: link:../connector-woocommerce-admin
+      '@agentshelf/testing':
+        specifier: workspace:^
+        version: link:../testing
 
   packages/crawler:
     dependencies:
