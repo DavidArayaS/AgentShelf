@@ -38,6 +38,6 @@
     "@agentshelf/storage-memory": "workspace:^",
     "@agentshelf/protocol-sdk": "workspace:^",
     "@agentshelf/connector-sdk": "workspace:^",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }

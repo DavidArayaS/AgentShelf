@@ -30,6 +30,6 @@
   },
   "dependencies": {
     "@agentshelf/schema": "workspace:^",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }
