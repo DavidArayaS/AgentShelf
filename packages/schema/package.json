@@ -29,6 +29,6 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }
